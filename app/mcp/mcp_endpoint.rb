@@ -79,7 +79,8 @@ class McpEndpoint
   def required_scopes
     return [] unless @env["REQUEST_METHOD"] == "POST" && @env["HTTP_AUTHORIZATION"].present?
 
-    tool = TOOLS.find { |candidate| candidate.tool_name == called_tool_name }
+    name = called_tool_name
+    tool = TOOLS.find { |candidate| candidate.tool_name == name }
     tool ? [ tool.required_scope ] : []
   end
 
@@ -95,7 +96,7 @@ class McpEndpoint
   # Reads no more than one byte over the limit, which is enough for the transport to answer 413,
   # and leaves the body in place for it. Rack 3 inputs need not be rewindable.
   def read_body
-    @body ||= @env["rack.input"]&.read(MAX_REQUEST_BYTES + 1).to_s.tap do |body|
+    @env["rack.input"]&.read(MAX_REQUEST_BYTES + 1).to_s.tap do |body|
       @env["rack.input"] = StringIO.new(body)
     end
   end
