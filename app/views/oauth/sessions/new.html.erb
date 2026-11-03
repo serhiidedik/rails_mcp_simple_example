@@ -1,7 +1,7 @@
 <% if current_user %>
   <h1>You are signed in</h1>
   <p>Signed in as <strong><%= current_user.email_address %></strong>. You can go back to your application.</p>
-  <%= button_to "Sign out", oauth_logout_path, method: :delete %>
+  <%= button_to "Sign out", oauth_logout_path %>
 <% else %>
   <h1>Sign in to authorize access</h1>
   <% if @error %>

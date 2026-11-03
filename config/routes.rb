@@ -9,10 +9,14 @@ Rails.application.routes.draw do
     skip_controllers :applications, :authorized_applications, :token_info
   end
 
+  # Plain POST routes for what a form submits. An API-only app has no Rack::MethodOverride, so a
+  # form asking for DELETE through `_method` would be routed by its POST: on the consent page,
+  # "Deny" would grant access.
   scope :oauth, module: :oauth, as: :oauth do
     get "login", to: "sessions#new"
     post "login", to: "sessions#create"
-    delete "logout", to: "sessions#destroy"
+    post "logout", to: "sessions#destroy"
+    post "authorize/deny", to: "authorizations#destroy", as: :deny
     post "register", to: "client_registrations#create"
   end
 

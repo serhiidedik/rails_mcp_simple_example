@@ -31,11 +31,11 @@
     <%= render "request_fields" %>
     <%= submit_tag "Allow" %>
   <% end %>
-  <%= form_tag oauth_authorization_path, method: :delete do %>
+  <%= form_tag oauth_deny_path, method: :post do %>
     <%= render "request_fields" %>
     <%= submit_tag "Deny" %>
   <% end %>
 </div>
 
 <p class="muted">Signed in as <%= current_user.email_address %>.</p>
-<%= button_to "Use another account", oauth_logout_path, method: :delete %>
+<%= button_to "Use another account", oauth_logout_path %>

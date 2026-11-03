@@ -250,6 +250,60 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
     assert Doorkeeper::AccessToken.exists?(token: Digest::SHA256.hexdigest(tokens["access_token"]))
   end
 
+  # --- The forms a browser actually submits -----------------------------------------------
+  #
+  # API-only Rails has no Rack::MethodOverride: a form relying on `_method` would be routed by
+  # its POST. On the consent page that once meant "Deny" granted access. So these tests submit
+  # what the page renders, the way a browser does, never an assumed route.
+
+  test "the Allow button on the rendered consent page grants access" do
+    sign_in
+    get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+
+    submit_form_with_button("Allow")
+
+    assert_response :redirect
+    assert redirect_query["code"].present?
+    assert_nil redirect_query["error"]
+  end
+
+  test "the Deny button on the rendered consent page denies access" do
+    sign_in
+    get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+
+    assert_no_difference("Doorkeeper::AccessGrant.count") do
+      submit_form_with_button("Deny")
+    end
+
+    assert_response :redirect
+    assert_equal "access_denied", redirect_query["error"]
+    assert_nil redirect_query["code"]
+    assert_equal "http://localhost:3000", redirect_query["iss"]
+  end
+
+  test "the sign out button on the rendered consent page signs out" do
+    sign_in
+    get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+
+    submit_form_with_button("Use another account")
+
+    assert_response :see_other
+    assert_nil session[:user_id]
+  end
+
+  test "no page relies on a method override, which this stack does not have" do
+    get "/oauth/login"
+    assert_empty css_select("input[name=_method]")
+
+    sign_in
+    get "/oauth/login"
+    assert_empty css_select("input[name=_method]")
+
+    get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+    assert_empty css_select("input[name=_method]")
+    assert_not_includes Rails.application.middleware.map(&:name), "Rack::MethodOverride"
+  end
+
   # --- Browser pages --------------------------------------------------------------------
 
   test "wrong credentials do not sign in" do
@@ -274,7 +328,7 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
     assert_equal users(:alice).id, session[:user_id]
     assert_not_equal id_before, session.id.to_s
 
-    delete "/oauth/logout"
+    post "/oauth/logout"
     assert_nil session[:user_id]
   end
 
@@ -314,6 +368,15 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def submit_form_with_button(label)
+    form = css_select("form").find { |candidate| candidate.css("input[type=submit],button").any? { |button| [ button["value"], button.text ].include?(label) } }
+    assert form, "no form with a #{label.inspect} button in: #{response.body}"
+    assert_equal "post", form["method"].to_s.downcase
+
+    fields = form.css("input[type=hidden]").each_with_object(Hash.new { |hash, key| hash[key] = [] }) { |input, all| all[input["name"]] << input["value"].to_s }
+    post form["action"], params: fields.to_h { |name, values| name.end_with?("[]") ? [ name.delete_suffix("[]"), values ] : [ name, values.last ] }
+  end
 
   def with_forgery_protection
     original = ActionController::Base.allow_forgery_protection
