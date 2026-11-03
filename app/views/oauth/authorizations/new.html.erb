@@ -1,0 +1,41 @@
+<%# The person is deciding whether to trust this client, and most of what a client says about
+    itself is unverified. So the page shows where the code will actually be sent. %>
+<% application = @pre_auth.client.application %>
+<% redirect_uri = URI.parse(@pre_auth.redirect_uri) %>
+
+<h1>Allow <strong><%= @pre_auth.client.name %></strong> to access your account?</h1>
+
+<% if application.registration_type == "metadata_document" %>
+  <p class="muted">Client identity published at <code><%= application.uid %></code></p>
+<% elsif application.registration_type == "dynamic" %>
+  <p class="notice">This application registered itself, so its name is unverified. Only continue if you started this connection yourself.</p>
+<% end %>
+
+<p>After you allow access, you will be sent to <strong><%= redirect_uri.host %></strong>.</p>
+
+<% if Oauth::RedirectUriPolicy.loopback?(redirect_uri) %>
+  <p class="notice">That address is a program running on this computer. Only continue if you started it yourself.</p>
+<% end %>
+
+<p>It will be able to:</p>
+<ul>
+  <% @pre_auth.scopes.each do |scope| %>
+    <li><%= t(scope, scope: %i[ doorkeeper scopes ], default: scope) %></li>
+  <% end %>
+</ul>
+
+<p class="muted">Access is limited to <code><%= Array(@pre_auth.resource_indicators).to_sentence %></code>.</p>
+
+<div class="actions">
+  <%= form_tag oauth_authorization_path, method: :post do %>
+    <%= render "request_fields" %>
+    <%= submit_tag "Allow" %>
+  <% end %>
+  <%= form_tag oauth_authorization_path, method: :delete do %>
+    <%= render "request_fields" %>
+    <%= submit_tag "Deny" %>
+  <% end %>
+</div>
+
+<p class="muted">Signed in as <%= current_user.email_address %>.</p>
+<%= button_to "Use another account", oauth_logout_path, method: :delete %>

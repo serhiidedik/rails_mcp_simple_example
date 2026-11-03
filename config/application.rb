@@ -28,5 +28,24 @@ module RailsMcpSimpleExample
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Public URL of the MCP endpoint and of the OAuth issuer (config/mcp.yml).
+    config.x.mcp = config_for(:mcp)
+    config.x.mcp.resource_uri = "#{config.x.mcp.public_url}#{config.x.mcp.endpoint_path}"
+
+    # The API itself stays stateless. Only the OAuth login and consent pages use a session,
+    # so its cookie is scoped to /oauth and never reaches /mcp or the REST endpoints.
+    config.session_store :cookie_store,
+      key: "_mcp_oauth_session",
+      path: "/oauth",
+      same_site: :lax,
+      secure: Rails.env.production?,
+      expire_after: 1800 # seconds: long enough to approve a client, short on a shared machine.
+    config.middleware.use ActionDispatch::Cookies
+    config.middleware.use config.session_store, config.session_options
+
+    # A client-controlled Client-Ip header must never become a 500: remote_ip is read inside
+    # the rack-attack middleware, before any rescue_from can run.
+    config.action_dispatch.ip_spoofing_check = false
   end
 end

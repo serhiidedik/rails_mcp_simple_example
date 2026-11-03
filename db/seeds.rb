@@ -1,9 +1,11 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
-#
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
+# Accounts are created out of band: this sample has no sign-up. Development gets one demo user,
+# the password is printed once. In production use the console: User.create!(email_address:, password:).
+if Rails.env.development?
+  email_address = ENV.fetch("SEED_USER_EMAIL", "demo@example.com")
+
+  unless User.exists?(email_address:)
+    password = ENV.fetch("SEED_USER_PASSWORD") { SecureRandom.base58(20) }
+    User.create!(email_address:, password:)
+    puts "Created #{email_address} with password: #{password}"
+  end
+end

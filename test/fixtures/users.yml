@@ -1,0 +1,7 @@
+alice:
+  email_address: alice@example.com
+  password_digest: <%= BCrypt::Password.create("correct horse battery staple", cost: BCrypt::Engine::MIN_COST) %>
+
+bob:
+  email_address: bob@example.com
+  password_digest: <%= BCrypt::Password.create("correct horse battery staple", cost: BCrypt::Engine::MIN_COST) %>
