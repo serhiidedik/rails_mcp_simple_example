@@ -1,0 +1,17 @@
+<% if current_user %>
+  <h1>You are signed in</h1>
+  <p>Signed in as <strong><%= current_user.email_address %></strong>. You can go back to your application.</p>
+  <%= button_to "Sign out", oauth_logout_path %>
+<% else %>
+  <h1>Sign in to authorize access</h1>
+  <% if @error %>
+    <p class="error" role="alert"><%= @error %></p>
+  <% end %>
+  <%= form_with url: oauth_login_path, method: :post do |form| %>
+    <%= form.label :email_address, "Email address" %>
+    <%= form.email_field :email_address, required: true, autofocus: true, autocomplete: "username" %>
+    <%= form.label :password, "Password" %>
+    <%= form.password_field :password, required: true, autocomplete: "current-password" %>
+    <div class="actions"><%= form.submit "Sign in" %></div>
+  <% end %>
+<% end %>

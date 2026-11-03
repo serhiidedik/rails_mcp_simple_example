@@ -1,0 +1,21 @@
+# Settings shared by the MCP endpoint and the OAuth authorization server.
+shared:
+  server_name: rails-mcp-simple-example
+  server_title: Rails MCP simple example
+  server_version: 1.0.0
+  endpoint_path: /mcp
+  # The minimal scope for basic functionality, published in the protected resource
+  # metadata. Clients get more through the step-up flow, when a tool actually needs it.
+  base_scopes: ["posts:read"]
+  # Browser origins accepted besides same-origin. Non-browser clients send no Origin.
+  allowed_origins: <%= ENV.fetch("MCP_ALLOWED_ORIGINS", "").split(",").map(&:strip).to_json %>
+
+development:
+  public_url: <%= ENV.fetch("MCP_PUBLIC_URL", "http://localhost:3000") %>
+
+test:
+  public_url: http://localhost:3000
+
+production:
+  # Required, https, no trailing slash. Never derived from the Host header, which a client controls.
+  public_url: <%= ENV["MCP_PUBLIC_URL"] %>

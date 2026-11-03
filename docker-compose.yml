@@ -1,0 +1,88 @@
+# Local development: the app and its database, nothing else needed on the machine.
+#
+#   docker compose up --build                 # the app on http://localhost:3000
+#   docker compose run --rm mcp-check         # end-to-end check with the official SDK client
+#   docker compose run --rm test              # the test suite
+#   docker compose down --volumes             # remove everything, data included
+#
+# The credentials are for this throwaway database only. Production is config/deploy.yml.
+name: rails-mcp-simple-example
+
+x-database: &database
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: development-only
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment: *database
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    # No published port: only the app reaches the database.
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      RAILS_ENV: development
+      DATABASE_URL: postgres://postgres:development-only@db:5432/rails_mcp_simple_example_development
+      MCP_PUBLIC_URL: http://localhost:3000
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      RATE_LIMIT_REQ_IP: ${RATE_LIMIT_REQ_IP:-600}
+      RATE_LIMIT_LOGIN_IP: ${RATE_LIMIT_LOGIN_IP:-10}
+      SEED_USER_EMAIL: demo@example.com
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-demo-password-change-me}
+    ports:
+      - "127.0.0.1:3000:3000" # This machine only.
+    volumes:
+      - .:/rails
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/up"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # An independent client, sharing the app's network so that http://localhost:3000 is the app:
+  # the SDK allows plain http on loopback only, and the transport checks the Host header.
+  mcp-check:
+    profiles: [check]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    network_mode: service:web
+    environment:
+      MCP_CHECK_EMAIL: demo@example.com
+      MCP_CHECK_PASSWORD: ${SEED_USER_PASSWORD:-demo-password-change-me}
+    volumes:
+      - ./script/mcp_client_check.rb:/check/mcp_client_check.rb:ro
+    command: ["ruby", "/check/mcp_client_check.rb"]
+    depends_on:
+      web:
+        condition: service_healthy
+
+  test:
+    profiles: [check]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://postgres:development-only@db:5432/rails_mcp_simple_example_test
+    volumes:
+      - .:/rails
+    command: ["bash", "-c", "bin/rails db:prepare && bin/rails test"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:

@@ -1,0 +1,6 @@
+en:
+  doorkeeper:
+    scopes:
+      "posts:read": Read posts
+      "posts:write": Create and edit posts
+      "posts:delete": Delete posts
