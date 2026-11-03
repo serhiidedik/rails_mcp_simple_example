@@ -1,51 +1,42 @@
+# REST adapter over the Posts interactions: HTTP concerns only.
 class PostsController < ApplicationController
-  before_action :set_post, only: %i[ show update destroy ]
+  rescue_from ActiveInteraction::InvalidInteractionError do |error|
+    render json: error.interaction.errors, status: :unprocessable_content
+  end
 
   # GET /posts
   def index
-    @posts = Post.all
+    page = Posts::List.run!(params.permit(:cursor, :limit).to_h)
+    response.headers["Link"] = %(<#{posts_url(cursor: page.next_cursor)}>; rel="next") if page.next_cursor
 
-    render json: @posts
+    render json: page.posts
   end
 
   # GET /posts/1
   def show
-    render json: @post
+    render json: Posts::Find.run!(id: params[:id])
   end
 
   # POST /posts
   def create
-    @post = Post.new(post_params)
+    post = Posts::Create.run!(post_params)
 
-    if @post.save
-      render json: @post, status: :created, location: @post
-    else
-      render json: @post.errors, status: :unprocessable_content
-    end
+    render json: post, status: :created, location: post
   end
 
   # PATCH/PUT /posts/1
   def update
-    if @post.update(post_params)
-      render json: @post
-    else
-      render json: @post.errors, status: :unprocessable_content
-    end
+    render json: Posts::Update.run!(post_params.merge(id: params[:id]))
   end
 
   # DELETE /posts/1
   def destroy
-    @post.destroy!
+    Posts::Destroy.run!(id: params[:id])
   end
 
   private
-    # Use callbacks to share common setup or constraints between actions.
-    def set_post
-      @post = Post.find(params.expect(:id))
-    end
-
     # Only allow a list of trusted parameters through.
     def post_params
-      params.expect(post: [ :title, :body, :published ])
+      params.expect(post: [ :title, :body, :published ]).to_h
     end
 end
