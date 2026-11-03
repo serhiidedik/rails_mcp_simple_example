@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # MCP over Streamable HTTP. The lambda keeps the endpoint reloadable in development.
+  match Rails.configuration.x.mcp.endpoint_path, to: ->(env) { McpEndpoint.call(env) }, via: :all
+
   # OAuth 2.1 authorization server, plus /.well-known/oauth-authorization-server (RFC 8414).
   # Only what the MCP flow needs is routed: no admin UI, no token info.
   use_doorkeeper do
