@@ -62,3 +62,15 @@ Doorkeeper.configure do
   # Nothing here needs introspection: the resource server reads the same database.
   allow_token_introspection false
 end
+
+# RFC 8252 lets the port of a loopback redirect URI vary at runtime, since a native client listens
+# on whichever port is free. Doorkeeper applies that to IP addresses only, but MCP clients use
+# localhost too: native clients register http://localhost/callback and redirect to a random port.
+# Only the port varies: the matcher still compares scheme, host, path and the rest exactly.
+Doorkeeper::OAuth::Helpers::URIChecker.singleton_class.prepend(
+  Module.new do
+    def loopback_uri?(uri)
+      uri.host == "localhost" || super
+    end
+  end
+)
