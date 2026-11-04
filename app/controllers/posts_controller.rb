@@ -1,15 +1,11 @@
 # REST adapter over the Posts interactions: HTTP concerns only.
 class PostsController < ApplicationController
-  rescue_from ActiveInteraction::InvalidInteractionError do |error|
-    render json: error.interaction.errors, status: :unprocessable_content
-  end
-
   # GET /posts
   def index
     page = Posts::List.run!(params.permit(:cursor, :limit).to_h)
     response.headers["Link"] = %(<#{posts_url(cursor: page.next_cursor)}>; rel="next") if page.next_cursor
 
-    render json: page.posts
+    render json: page.records
   end
 
   # GET /posts/1

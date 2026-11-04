@@ -104,7 +104,7 @@ class McpToolsTest < ActionDispatch::IntegrationTest
   end
 
   test "list walks every page" do
-    Post.delete_all
+    Post.destroy_all
     ids = Array.new(3) { |i| Post.create!(title: "Post #{i}").id }
 
     first = tool_result("list_posts", { limit: 2 }, token: @token)

@@ -24,7 +24,7 @@ module Posts
 
     def self.perform(**arguments)
       respond_with(List.run(arguments)) do |page|
-        { posts: page.posts.map { |post| ToolPayload.post(post) }, next_cursor: page.next_cursor }
+        { posts: page.records.map { |post| ToolPayload.post(post) }, next_cursor: page.next_cursor }
       end
     end
   end
