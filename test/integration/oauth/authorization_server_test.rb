@@ -72,7 +72,7 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
     access_token = Doorkeeper::AccessToken.by_token(tokens["access_token"])
     assert_equal Oauth::ResourceIndicator.canonical, access_token.resource
     assert_equal users(:alice).id, access_token.resource_owner_id
-    assert_equal "posts:read", access_token.scopes.to_s
+    assert_equal Doorkeeper.configuration.scopes.to_a.sort, access_token.scopes.to_a.sort
   end
 
   test "denying returns access_denied to the client with the issuer" do
@@ -85,8 +85,19 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
     assert_equal "state-123", redirect_query["state"]
   end
 
-  test "defaults to the base scope when the client asks for none" do
+  test "a client that asks for no scope gets one consent for every scope" do
     assert_equal Doorkeeper.configuration.scopes.to_a.sort, obtain_tokens(@client, scope: nil)["scope"].split.sort
+  end
+
+  test "a client that asks for a few scopes sees and gets all of them" do
+    sign_in
+    get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge, scope: "posts:read posts:write posts:delete")
+
+    assert_response :success
+    Doorkeeper.configuration.scopes.each do |scope|
+      assert_includes response.body, I18n.t("doorkeeper.scopes.#{scope}"), scope
+    end
+    assert_equal Doorkeeper.configuration.scopes.to_a.sort, obtain_tokens(@client, scope: "posts:read")["scope"].split.sort
   end
 
   test "an unknown scope is refused" do
@@ -217,7 +228,7 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
 
     renewed = Doorkeeper::AccessToken.by_token(second["access_token"])
     assert_equal Oauth::ResourceIndicator.canonical, renewed.resource
-    assert_equal "posts:read", renewed.scopes.to_s
+    assert_equal Doorkeeper.configuration.scopes.to_a.sort, renewed.scopes.to_a.sort
 
     refresh(@client, first["refresh_token"])
     assert_response :bad_request

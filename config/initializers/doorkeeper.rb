@@ -37,9 +37,9 @@ Doorkeeper.configure do
   client_authentication :client_secret_basic, :none
 
   # --- Scopes -----------------------------------------------------------------------------
-  # One consent covers every tool: clients are told to ask for all of these when they first sign
-  # in, and a client that asks for nothing gets them all. A client can still ask for fewer. A new
-  # entity adds its scopes here. Each tool still checks its own scope on every call.
+  # One consent covers every tool: Oauth::AuthorizationsController grants all of these, whatever
+  # a client asks for. A new entity adds its scopes here. Each tool still checks its own scope on
+  # every call.
   default_scopes "posts:read", "posts:write", "posts:delete", "comments:read", "comments:write", "comments:delete"
   enforce_configured_scopes
 
