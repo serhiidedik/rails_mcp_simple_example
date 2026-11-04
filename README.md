@@ -4,30 +4,138 @@ A Rails API whose `Post` CRUD is exposed to AI clients through the
 [Model Context Protocol](https://modelcontextprotocol.io/specification/2026-07-28), over
 Streamable HTTP, protected by OAuth 2.1. It is meant as an example to copy from.
 
+```mermaid
+flowchart LR
+    client([MCP client])
+    person([Person in a browser])
+    rest([REST client])
+
+    subgraph app [Rails app]
+        endpoint["McpEndpoint<br/>POST /mcp"]
+        oauth["Doorkeeper<br/>/oauth/*"]
+        tools["Tools<br/>app/mcp/posts"]
+        controller["PostsController<br/>/posts"]
+        interactions["Interactions<br/>app/interactions/posts"]
+        post[(Post)]
+    end
+
+    client -- bearer token --> endpoint
+    client -- discovery, registration, token --> oauth
+    person -- sign-in, consent --> oauth
+    endpoint -. verifies the token .-> oauth
+    endpoint --> tools --> interactions --> post
+    rest --> controller --> interactions
 ```
-MCP client ── Authorization: Bearer ──> /mcp   (stateless Streamable HTTP)
-    │                                    │  Origin and Host, token expiry, revocation,
-    │                                    │  audience, per-tool scope
-    │                                    ▼
-    │                           app/mcp/posts/*_tool.rb ─┐
-    │                                                    ├─> app/interactions/posts/* ─> Post
-    │                     REST: PostsController ─────────┘
-    │
-    └── discovery, registration, login, consent ──> /oauth/*  (Doorkeeper)
-```
+
+Rack::Attack rate limits everything inside the box. REST and MCP share the same interactions, so a
+rule added there holds for both.
 
 ## Run it
 
 ```sh
-docker compose up --build             # http://localhost:3000, demo@example.com / demo-password-change-me
+docker compose up --build             # http://localhost:3000, sign in as demo@example.com / demo-password-change-me
 docker compose run --rm mcp-check     # end-to-end check with the official SDK client
 docker compose run --rm test          # the test suite
 docker compose down --volumes         # remove everything
 ```
 
-Without Docker: `bin/setup`, then `bin/rails test`. PostgreSQL has to be running.
+Without Docker: `bin/setup`, then `bin/rails test`. PostgreSQL has to be running. In development,
+`db:seed` creates the demo user and ten sample posts, if there are none yet.
 
 Connect a client to `http://localhost:3000/mcp`.
+
+## API reference
+
+Open **`/`** on the running app, `http://localhost:3000/` locally. It documents every tool with its
+scope, arguments, returned fields and an example, along with the errors and a raw `curl` call.
+
+MCP has no OpenAPI-style file. A client reads the contract live from `tools/list`, and the proposed
+[Server Card](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/seps/2127-mcp-server-cards.mdx)
+leaves tools out on purpose, since they can vary by user. So this app builds its equivalent from the
+tool classes that answer that call:
+
+| OpenAPI world | Here |
+|---|---|
+| Swagger UI, for reading | `GET /`, rendered from the tool classes on every request |
+| `openapi.json` | `GET /docs/tools.json`, the exact `tools/list` result |
+| The spec file reviewed in pull requests | [`docs/mcp-tools.json`](docs/mcp-tools.json), a committed copy. Regenerate it with `bin/rails mcp:docs`; a test fails when it is stale |
+| Swagger UI, "Try it out" | [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector): `npx @modelcontextprotocol/inspector@2.12.0 --server-url http://localhost:3000/mcp --transport http` |
+| Contract tests | A test calls every documented example against the real endpoint |
+
+For a quick `curl`, `bin/rails mcp:dev_token` prints a one-hour token. It refuses to run outside
+development. The page has no JavaScript and loads nothing from elsewhere, because it shares an origin
+with the consent page.
+
+## How data flows
+
+One tool call, from the client to the database and back. Every tool follows this path.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as MCP client
+    participant R as Rails middleware
+    participant T as McpEndpoint and SDK transport
+    participant V as DoorkeeperTokenVerifier
+    participant G as GetTool
+    participant I as Posts::Find
+    participant P as Post
+
+    C->>R: POST /mcp, tools/call get_post, bearer token
+    R->>R: Host allowed in production (else 403), within rate limits (else 429)
+    R->>T: Build a server and transport for this request
+    T->>T: Origin and Host allowed (else 403)
+    T->>V: verify(token)
+    V-->>T: Known, unexpired, not revoked, issued for this endpoint (else 401)
+    T->>T: Token holds posts:read (else 403 naming the scope)
+    T->>T: Tool exists, arguments match inputSchema (else -32602 or isError)
+    T->>G: call(id: 1)
+    G->>G: Check the scope again, start the audit line
+    G->>I: run(id: 1)
+    I->>P: find(1)
+    P-->>I: The record (if missing, isError)
+    I-->>G: Outcome: a post, or validation errors (isError)
+    G-->>T: structuredContent and a text copy
+    T->>T: Check the result against outputSchema
+    T-->>C: 200 with the JSON-RPC result
+```
+
+How a client gets a token, and more access later. The first connection asks for the base scope only.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Person
+    participant C as MCP client
+    participant M as /mcp
+    participant O as /oauth (Doorkeeper)
+
+    C->>M: POST /mcp with no token
+    M-->>C: 401 with resource_metadata and scope=posts:read
+    C->>M: GET /.well-known/oauth-protected-resource/mcp
+    M-->>C: This resource and the server that authorizes it
+    C->>O: GET /.well-known/oauth-authorization-server
+    O-->>C: Endpoints, and S256 as the only PKCE method
+    C->>O: POST /oauth/register, unless its client_id is a metadata URL
+    O-->>C: A client_id
+    C->>U: Open /oauth/authorize with a PKCE challenge and resource
+    U->>O: Sign in, read the consent page, click Allow
+    O-->>C: Redirect with code, state and iss
+    C->>O: POST /oauth/token with the code, the verifier and resource
+    O-->>C: A 1-hour access token and a rotating refresh token
+    C->>M: Repeat the first request with the bearer token
+
+    Note over U,O: Later, a tool needs more than the token holds (step-up)
+    C->>M: tools/call create_post with a posts:read token
+    M-->>C: 403 insufficient_scope, scope=posts:write
+    C->>U: Ask again, for posts:read posts:write
+    U->>O: Click Allow on a new consent page
+    O-->>C: A new code, exchanged for a new token as before
+    C->>M: Retry create_post, get 200
+```
+
+The same flows are drawn on the page at `/`. They are written by hand there and here, so change both
+when the path changes.
 
 ## What is exposed
 
@@ -44,6 +152,7 @@ HTTP 403 naming the scope, asks the person again, and retries (step-up authoriza
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /`, `GET /docs/tools.json` | The API reference, public and free of data |
 | `POST /mcp` | The MCP endpoint |
 | `GET /.well-known/oauth-protected-resource/mcp` | Which authorization server protects `/mcp` (RFC 9728) |
 | `GET /.well-known/oauth-authorization-server` | Authorization server metadata (RFC 8414) |
@@ -60,6 +169,7 @@ HTTP 403 naming the scope, asks the person again, and retries (step-up authoriza
 | `app/mcp/posts/` | One thin tool per operation, plus the output schema |
 | `app/mcp/mcp_endpoint.rb` | Per-request wiring, and the allowlist of exposed tools |
 | `app/mcp/doorkeeper_token_verifier.rb` | The only link between MCP and the authorization server |
+| `app/mcp/mcp_api_reference.rb`, `app/controllers/docs_controller.rb`, `app/views/docs/` | The API reference at `/` |
 | `app/interactions/oauth/` | Client registration, metadata document fetching, retention |
 | `app/controllers/oauth/`, `app/views/oauth/` | Login and consent pages |
 | `config/initializers/doorkeeper.rb` | Every authorization server decision, with the reason |
@@ -97,6 +207,12 @@ module Comments
       required: %w[ post_id text ],
       additionalProperties: false
     )
+    output_schema(
+      properties: { id: { type: "integer" }, text: { type: "string" } },
+      required: %w[ id text ],
+      additionalProperties: false
+    )
+    example arguments: { post_id: 1, text: "Nice" }, result: { id: 1, text: "Nice" }
 
     def self.perform(**arguments)
       respond_with(Create.run(arguments)) { |comment| { id: comment.id, text: comment.text } }
@@ -106,8 +222,9 @@ end
 ```
 
 Then add the tool to `McpEndpoint::TOOLS`, the scope to `optional_scopes` in the Doorkeeper
-initializer, and its label to `config/locales/oauth.en.yml`. `test/integration/mcp_tools_test.rb`
-checks that every listed tool declares a known scope and a closed input schema.
+initializer, and its label to `config/locales/oauth.en.yml`, and run `bin/rails mcp:docs`. The new tool
+appears on the page at `/` by itself. `test/integration/mcp_tools_test.rb` checks that every listed tool
+declares a known scope and a closed input schema, and `mcp_api_reference_test.rb` calls its example.
 
 **Use an external identity provider (Keycloak, Auth0, ...).** Replace `DoorkeeperTokenVerifier` in
 `McpEndpoint` with the SDK's `MCP::Server::OAuth::JWTVerifier` or `IntrospectionVerifier`, and point
@@ -149,6 +266,8 @@ No tool changes.
    the user into the interactions (`auth_info.subject` holds the user id).
 3. Set `MCP_PUBLIC_URL` (see `.env.example`). The app refuses to boot without an https URL.
 4. Create the accounts, since there is no sign-up: `User.create!(email_address:, password:)`.
+5. Decide whether the reference at `/` stays public. It holds no data, but it does show your tools
+   and scopes to anyone. To hide it, remove the `root` and `docs/tools.json` routes in `config/routes.rb`.
 
 ## Known limits
 
