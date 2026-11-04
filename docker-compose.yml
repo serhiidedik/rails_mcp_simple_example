@@ -1,5 +1,6 @@
 # Local development: the app and its database, nothing else needed on the machine.
 #
+#   cp .env.example .env                      # first time only: the demo sign-in lives there
 #   docker compose up --build                 # the app on http://localhost:3000
 #   docker compose run --rm mcp-check         # end-to-end check with the official SDK client
 #   docker compose run --rm test              # the test suite
@@ -36,8 +37,8 @@ services:
       MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
       RATE_LIMIT_REQ_IP: ${RATE_LIMIT_REQ_IP:-600}
       RATE_LIMIT_LOGIN_IP: ${RATE_LIMIT_LOGIN_IP:-10}
-      SEED_USER_EMAIL: demo@example.com
-      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-demo-password-change-me}
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL:?copy .env.example to .env}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:?copy .env.example to .env}
     ports:
       - "127.0.0.1:3000:3000" # This machine only.
     volumes:
@@ -60,8 +61,8 @@ services:
       dockerfile: Dockerfile.dev
     network_mode: service:web
     environment:
-      MCP_CHECK_EMAIL: demo@example.com
-      MCP_CHECK_PASSWORD: ${SEED_USER_PASSWORD:-demo-password-change-me}
+      MCP_CHECK_EMAIL: ${SEED_USER_EMAIL:?copy .env.example to .env}
+      MCP_CHECK_PASSWORD: ${SEED_USER_PASSWORD:?copy .env.example to .env}
     volumes:
       - ./script/mcp_client_check.rb:/check/mcp_client_check.rb:ro
     command: ["ruby", "/check/mcp_client_check.rb"]

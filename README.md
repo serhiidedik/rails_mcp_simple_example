@@ -32,17 +32,53 @@ rule added there holds for both.
 
 ## Run it
 
+You need Docker, and nothing else.
+
 ```sh
-docker compose up --build             # http://localhost:3000, sign in as demo@example.com / demo-password-change-me
-docker compose run --rm mcp-check     # end-to-end check with the official SDK client
-docker compose run --rm test          # the test suite
-docker compose down --volumes         # remove everything
+cp .env.example .env         # the demo sign-in lives here, change it if you like
+docker compose up --build    # wait until it says "Listening on"
 ```
 
-Without Docker: `bin/setup`, then `bin/rails test`. PostgreSQL has to be running. In development,
-`db:seed` creates the demo user and ten sample posts, if there are none yet.
+The first start creates the database, the demo user from `.env` and ten sample posts.
 
-Connect a client to `http://localhost:3000/mcp`.
+**1. Read the reference.** Open <http://localhost:3000/>.
+
+**2. Check that everything works.** In a second terminal, this runs the official SDK client through
+sign-in, consent and all five tools, and prints one line per check:
+
+```sh
+docker compose run --rm mcp-check
+```
+
+**3. Call a tool by hand.** Get a one-hour token with all scopes, then read the first post:
+
+```sh
+TOKEN=$(docker compose exec -T web bin/rails mcp:dev_token)
+
+curl http://localhost:3000/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-11-25" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_post","arguments":{"id":1}}}'
+```
+
+**4. Connect a real client and sign in.** A browser opens, where you sign in with `SEED_USER_EMAIL` and
+`SEED_USER_PASSWORD` from `.env` and approve the access. Add this URL to your client as an HTTP MCP server:
+
+```text
+http://localhost:3000/mcp
+```
+
+To finish:
+
+```sh
+docker compose run --rm test     # the test suite
+docker compose down --volumes    # remove everything. Do this too after changing the sign-in in .env
+```
+
+Without Docker, with PostgreSQL running: `bin/setup` creates `.env`, the database and the demo data, then
+starts the server. `bin/rails test` runs the tests.
 
 ## API reference
 
