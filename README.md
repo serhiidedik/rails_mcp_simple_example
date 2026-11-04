@@ -137,7 +137,7 @@ sequenceDiagram
     T-->>C: 200 with the JSON-RPC result
 ```
 
-How a client gets a token. The first connection asks for every scope, so one consent covers every tool.
+How a client gets a token. Approving it once grants every scope, so one consent covers every tool.
 
 ```mermaid
 sequenceDiagram
@@ -182,9 +182,9 @@ when the path changes.
 | `update_comment` | `comments:write` | Replaces the body of a comment |
 | `delete_comment` | `comments:delete` | Permanently deletes a comment |
 
-One consent covers all of these: the server tells a client to ask for every scope when it first signs in.
-Each tool still checks its own scope on every call. A client that holds too little, because it asked for
-less or connected before a new tool was added, gets an HTTP 403 naming the scope and asks the person once more.
+One consent covers all of these: approving a client grants every scope, whatever the client asked for, and
+the consent page lists them all. Each tool still checks its own scope on every call. A client that signed in
+before a new tool was added gets an HTTP 403 naming the scope, and asks the person once more.
 
 | Endpoint | Purpose |
 |---|---|
@@ -358,7 +358,7 @@ as data.
 **6. Expose the tools** by adding them to `TOOLS` in `app/mcp/mcp_endpoint.rb`.
 
 **7. Add the scopes** to `default_scopes` in `config/initializers/doorkeeper.rb`, and the text the consent
-page shows to `config/locales/oauth.en.yml`. New sign-ins then ask for them too. A client that is already
+page shows to `config/locales/oauth.en.yml`. New sign-ins then include them. A client that is already
 connected asks the person once more, the first time it calls a new tool.
 
 **8. Regenerate the contract.** The tools now appear on the page at `/` by themselves.
@@ -411,7 +411,7 @@ No tool changes.
 | A stolen authorization code | S256 PKCE on every client, short-lived and single-use codes; a replay revokes what the code issued | Doorkeeper initializer |
 | A stolen token | 1 hour access tokens, refresh tokens that rotate on every use, immediate revocation | Doorkeeper initializer |
 | A database leak | Tokens stored as SHA-256 digests, client secrets and passwords with bcrypt | Doorkeeper initializer, `User` |
-| A tool running without permission | The scope is checked at the HTTP layer and again in the tool, on every call. One consent grants every scope, so a person approves all access at once. A client can still ask for less | `ApplicationTool`, `McpEndpoint`, Doorkeeper initializer |
+| A tool running without permission | The scope is checked at the HTTP layer and again in the tool, on every call. One consent grants every scope, so a person approves all access at once, and a client cannot ask for less | `ApplicationTool`, `McpEndpoint`, Doorkeeper initializer |
 | Redirect to an attacker | Exact match against registered URIs, except the port of a loopback redirect (RFC 8252); https or loopback only | `Oauth::RedirectUriPolicy` |
 | Authorization server mix-up | `iss` in every authorization response (RFC 9207) | Doorkeeper initializer |
 | A client lying about itself | Never-skipped consent showing the redirect host, with a warning for self-registered and loopback clients | `app/views/oauth/authorizations/new.html.erb` |

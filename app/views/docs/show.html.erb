@@ -71,9 +71,9 @@
 
     <section id="token">
       <h2>How a client gets a token</h2>
-      <p>The first connection asks for every scope, so one consent covers every tool.</p>
+      <p>Approving a client once grants every scope, whatever it asked for, so one consent covers every tool.</p>
       <%= render "sequence", sequence: DocsHelper::FIRST_CONNECTION %>
-      <p>A client that holds too little, because it asked for less or connected before a new tool was added, gets a <code>403</code> naming the scope, and asks the person once more.</p>
+      <p>A client that connected before a new tool was added gets a <code>403</code> naming the scope, and asks the person once more.</p>
     </section>
 
     <section id="tools">

@@ -49,14 +49,12 @@ class McpOauthFlowTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized
   end
 
-  test "a client can still ask for less, and is held to it" do
-    client = create_public_client
-    tokens = obtain_tokens(client, scope: "posts:read")
-    assert_equal "posts:read", tokens["scope"]
+  test "a client that remembers fewer scopes still reaches every tool after one consent" do
+    tokens = obtain_tokens(create_public_client, scope: "posts:read posts:write posts:delete")
+    token = tokens["access_token"]
 
-    call_tool("create_post", { title: "Hello" }, token: tokens["access_token"])
-    assert_response :forbidden
-    assert_includes www_authenticate, %(scope="posts:write")
+    assert tool_result("list_comments", { post_id: posts(:one).id }, token:)
+    assert tool_result("create_comment", { post_id: posts(:one).id, body: "Hi" }, token:)
   end
 
   private
