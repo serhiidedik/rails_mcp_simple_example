@@ -38,7 +38,8 @@ rescue StandardError => error
   exit 1
 end
 
-# A person in a browser: keeps cookies and submits the forms the pages render, nothing assumed.
+# A person in a browser: keeps cookies, submits the forms the pages render, and sends the Origin a
+# browser would. A page with `Referrer-Policy: no-referrer` makes a browser post `Origin: null`.
 class Browser
   attr_reader :consents, :approved_scopes
 
@@ -93,11 +94,12 @@ class Browser
     request["Cookie"] = @cookies.map { |name, value| "#{name}=#{value}" }.join("; ") if @cookies.any?
     if body
       request["Content-Type"] = "application/x-www-form-urlencoded"
-      request["Origin"] = BASE_URL
+      request["Origin"] = @referrer_policy == "no-referrer" ? "null" : BASE_URL
       request.body = body
     end
 
     Net::HTTP.start(uri.host, uri.port) { |http| http.request(request) }.tap do |response|
+      @referrer_policy = response["referrer-policy"]
       Array(response.get_fields("set-cookie")).each do |cookie|
         name, value = cookie.split(";").first.split("=", 2)
         @cookies[name] = value
