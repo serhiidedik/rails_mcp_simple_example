@@ -46,10 +46,6 @@ class McpApiReference
     I18n.t("doorkeeper.scopes.#{scope}")
   end
 
-  def base_scope?(scope)
-    settings.base_scopes.include?(scope)
-  end
-
   def tools_with_scope(scope)
     tools.select { |tool| tool.required_scope == scope }
   end

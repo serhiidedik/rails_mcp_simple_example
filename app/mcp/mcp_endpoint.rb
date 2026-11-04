@@ -77,7 +77,7 @@ class McpEndpoint
   end
 
   # The scope of the tool being called, so that the transport answers a shortfall with an
-  # HTTP 403 and a WWW-Authenticate challenge, which is what starts a client's step-up flow.
+  # HTTP 403 and a WWW-Authenticate challenge, which tells a client holding too little what to ask for.
   # A tool call that gets past this for any reason still meets ApplicationTool's own check.
   #
   # Requests without credentials skip this: they are refused before the body matters.

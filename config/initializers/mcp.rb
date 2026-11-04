@@ -9,7 +9,8 @@ raise "MCP_PUBLIC_URL is required (the public https URL of this app, no trailing
 settings.resource_metadata = MCP::Server::OAuth::ProtectedResourceMetadata.new(
   resource: settings.resource_uri,
   authorization_servers: [ settings.public_url ],
-  scopes_supported: settings.base_scopes,
+  # Every scope, so that one consent covers every tool. Clients ask for what this lists.
+  scopes_supported: Doorkeeper.config.scopes.to_a,
   resource_name: settings.server_title
 )
 

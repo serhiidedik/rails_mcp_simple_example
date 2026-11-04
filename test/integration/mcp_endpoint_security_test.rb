@@ -12,7 +12,7 @@ class McpEndpointSecurityTest < ActionDispatch::IntegrationTest
     metadata = response.parsed_body
     assert_equal "http://localhost:3000/mcp", metadata["resource"]
     assert_equal [ "http://localhost:3000" ], metadata["authorization_servers"]
-    assert_equal [ "posts:read" ], metadata["scopes_supported"]
+    assert_equal Doorkeeper.configuration.scopes.to_a, metadata["scopes_supported"]
     assert_equal [ "header" ], metadata["bearer_methods_supported"]
   end
 
@@ -21,7 +21,7 @@ class McpEndpointSecurityTest < ActionDispatch::IntegrationTest
 
     assert_response :unauthorized
     assert_includes www_authenticate, %(resource_metadata="#{METADATA_URL}")
-    assert_includes www_authenticate, %(scope="posts:read")
+    assert_includes www_authenticate, %(scope="#{Doorkeeper.configuration.scopes}")
     assert_not_includes www_authenticate, "error="
   end
 

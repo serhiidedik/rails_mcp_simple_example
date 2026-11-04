@@ -3,29 +3,26 @@ require "test_helper"
 class SeedsTest < ActiveSupport::TestCase
   DEMO_USER = { "SEED_USER_EMAIL" => "seed-test@example.com", "SEED_USER_PASSWORD" => "a-long-enough-password" }.freeze
 
-  test "development gets the configured demo user and unique sample posts, once" do
+  test "development gets the configured demo user and unique sample posts, some with comments, once" do
     Post.destroy_all
 
-    assert_difference -> { User.count } => 1, -> { Post.count } => 10, -> { Comment.count } => 30 do
-      capture_io { seed_as_development(DEMO_USER) }
+    assert_difference -> { User.count } => 1, -> { Post.count } => 10 do
+      capture_io { with_faker_seed(1) { seed_as_development(DEMO_USER) } }
     end
     assert User.authenticate_by(email_address: DEMO_USER["SEED_USER_EMAIL"], password: DEMO_USER["SEED_USER_PASSWORD"])
     assert_equal 10, Post.distinct.count(:title)
     assert_equal 10, Post.distinct.count(:body)
     assert Post.all.all?(&:valid?)
-    assert Post.all.all? { |post| post.comments.size == 3 }
     assert Comment.all.all?(&:valid?)
+
+    comment_counts = Post.all.map { |post| post.comments.size }
+    assert_includes comment_counts, 0, "a coin flip leaves some posts without comments"
+    assert comment_counts.any?(&:positive?), "and gives others some"
+    assert comment_counts.uniq.size > 2, "with a random number of them"
+    assert comment_counts.all? { |count| count <= 5 }
 
     assert_no_difference [ "User.count", "Post.count", "Comment.count" ] do
       capture_io { seed_as_development(DEMO_USER) }
-    end
-  end
-
-  test "posts that already exist get comments too" do
-    Comment.delete_all
-
-    assert_no_difference("Post.count") do
-      assert_difference("Comment.count", Post.count * 3) { capture_io { seed_as_development(DEMO_USER) } }
     end
   end
 
@@ -53,6 +50,14 @@ class SeedsTest < ActiveSupport::TestCase
   end
 
   private
+
+  def with_faker_seed(seed)
+    Faker::Config.random = Random.new(seed)
+    Faker::UniqueGenerator.clear
+    yield
+  ensure
+    Faker::Config.random = nil
+  end
 
   def seed_as_development(env)
     original_env = Rails.env
