@@ -45,7 +45,7 @@ module DocsHelper
     lanes: [ "Person", "Client", "/mcp", "/oauth" ],
     steps: [
       Step.call(2, 3, "`POST /mcp` with no token"),
-      Step.call(3, 2, "`401` with `resource_metadata` and `scope=\"posts:read\"`", reply: true),
+      Step.call(3, 2, "`401` with `resource_metadata`, and `scope` listing every scope", reply: true),
       Step.call(2, 3, "`GET /.well-known/oauth-protected-resource/mcp`"),
       Step.call(3, 2, "This resource and the server that authorizes it", reply: true),
       Step.call(2, 4, "`GET /.well-known/oauth-authorization-server`"),
@@ -53,24 +53,11 @@ module DocsHelper
       Step.call(2, 4, "`POST /oauth/register`, unless its `client_id` is a metadata URL"),
       Step.call(4, 2, "A `client_id`", reply: true),
       Step.call(2, 1, "Opens `/oauth/authorize` in a browser, with a PKCE challenge and `resource`"),
-      Step.call(1, 4, "Signs in, reads the consent page and clicks Allow"),
+      Step.call(1, 4, "Signs in, reads the consent page and clicks Allow, once for every tool"),
       Step.call(4, 2, "Redirects to the client with `code`, `state` and `iss`"),
       Step.call(2, 4, "`POST /oauth/token` with the code, the verifier and `resource`"),
       Step.call(4, 2, "A 1-hour access token, and a refresh token that rotates on each use", reply: true),
       Step.call(2, 3, "Repeats the first request, with `Authorization: Bearer`")
-    ]
-  }.freeze
-
-  STEP_UP = {
-    caption: "How a client gets more access when a tool needs it",
-    lanes: [ "Person", "Client", "/mcp", "/oauth" ],
-    steps: [
-      Step.call(2, 3, "`tools/call create_post` with a `posts:read` token"),
-      Step.call(3, 2, "`403` with `error=\"insufficient_scope\"` and `scope=\"posts:write\"`", reply: true),
-      Step.call(2, 1, "Asks again, for `posts:read posts:write`"),
-      Step.call(1, 4, "Clicks Allow on a new consent page"),
-      Step.call(4, 2, "A new code, exchanged for a new token as before"),
-      Step.call(2, 3, "Retries `create_post` and gets `200`")
     ]
   }.freeze
 

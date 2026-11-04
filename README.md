@@ -136,7 +136,7 @@ sequenceDiagram
     T-->>C: 200 with the JSON-RPC result
 ```
 
-How a client gets a token, and more access later. The first connection asks for the base scope only.
+How a client gets a token. The first connection asks for every scope, so one consent covers every tool.
 
 ```mermaid
 sequenceDiagram
@@ -147,7 +147,7 @@ sequenceDiagram
     participant O as /oauth (Doorkeeper)
 
     C->>M: POST /mcp with no token
-    M-->>C: 401 with resource_metadata and scope=posts:read
+    M-->>C: 401 with resource_metadata and every scope
     C->>M: GET /.well-known/oauth-protected-resource/mcp
     M-->>C: This resource and the server that authorizes it
     C->>O: GET /.well-known/oauth-authorization-server
@@ -155,19 +155,12 @@ sequenceDiagram
     C->>O: POST /oauth/register, unless its client_id is a metadata URL
     O-->>C: A client_id
     C->>U: Open /oauth/authorize with a PKCE challenge and resource
-    U->>O: Sign in, read the consent page, click Allow
+    U->>O: Sign in, read the consent page, click Allow, once for every tool
     O-->>C: Redirect with code, state and iss
     C->>O: POST /oauth/token with the code, the verifier and resource
     O-->>C: A 1-hour access token and a rotating refresh token
     C->>M: Repeat the first request with the bearer token
 
-    Note over U,O: Later, a tool needs more than the token holds (step-up)
-    C->>M: tools/call create_post with a posts:read token
-    M-->>C: 403 insufficient_scope, scope=posts:write
-    C->>U: Ask again, for posts:read posts:write
-    U->>O: Click Allow on a new consent page
-    O-->>C: A new code, exchanged for a new token as before
-    C->>M: Retry create_post, get 200
 ```
 
 The same flows are drawn on the page at `/`. They are written by hand there and here, so change both
@@ -188,8 +181,9 @@ when the path changes.
 | `update_comment` | `comments:write` | Replaces the body of a comment |
 | `delete_comment` | `comments:delete` | Permanently deletes a comment |
 
-A client first asks for `posts:read` only. When it calls a tool that needs more, it gets an
-HTTP 403 naming the scope, asks the person again, and retries (step-up authorization).
+One consent covers all of these: the server tells a client to ask for every scope when it first signs in.
+Each tool still checks its own scope on every call. A client that holds too little, because it asked for
+less or connected before a new tool was added, gets an HTTP 403 naming the scope and asks the person once more.
 
 | Endpoint | Purpose |
 |---|---|
@@ -217,7 +211,7 @@ HTTP 403 naming the scope, asks the person again, and retries (step-up authoriza
 | `app/controllers/oauth/`, `app/views/oauth/` | Login and consent pages |
 | `config/initializers/doorkeeper.rb` | Every authorization server decision, with the reason |
 | `config/initializers/rack_attack.rb` | Every rate limit |
-| `config/mcp.yml` | Public URL, server identity, base scope, allowed origins |
+| `config/mcp.yml` | Public URL, server identity, allowed origins |
 
 ## Add a new entity to MCP
 
@@ -226,8 +220,8 @@ accident. Comments were added exactly this way, so the files below are real and 
 
 **1. Decide two things first.**
 
-- **Scopes:** one each for read, write and delete gives the least privilege, at the cost of more consent
-  screens. Comments use `comments:read`, `comments:write` and `comments:delete`.
+- **Scopes:** one each for read, write and delete, like `comments:read`, `comments:write` and
+  `comments:delete`. People approve them all on one consent page.
 - **Ownership:** scopes say what a client may do, not to which records. If a person should only touch
   their own records, add that now: the user id is `server_context.auth_info.subject`.
 
@@ -317,8 +311,9 @@ as data.
 
 **6. Expose the tools** by adding them to `TOOLS` in `app/mcp/mcp_endpoint.rb`.
 
-**7. Add the scopes** to `optional_scopes` in `config/initializers/doorkeeper.rb`, and the text the consent
-page shows to `config/locales/oauth.en.yml`.
+**7. Add the scopes** to `default_scopes` in `config/initializers/doorkeeper.rb`, and the text the consent
+page shows to `config/locales/oauth.en.yml`. New sign-ins then ask for them too. A client that is already
+connected asks the person once more, the first time it calls a new tool.
 
 **8. Regenerate the contract.** The tools now appear on the page at `/` by themselves.
 
@@ -369,7 +364,7 @@ No tool changes.
 | A stolen authorization code | S256 PKCE on every client, short-lived and single-use codes; a replay revokes what the code issued | Doorkeeper initializer |
 | A stolen token | 1 hour access tokens, refresh tokens that rotate on every use, immediate revocation | Doorkeeper initializer |
 | A database leak | Tokens stored as SHA-256 digests, client secrets and passwords with bcrypt | Doorkeeper initializer, `User` |
-| Too much access | Least privilege per tool, the scope checked at the HTTP layer and again in the tool | `ApplicationTool`, `McpEndpoint` |
+| A tool running without permission | The scope is checked at the HTTP layer and again in the tool, on every call. One consent grants every scope, so a person approves all access at once. A client can still ask for less | `ApplicationTool`, `McpEndpoint`, Doorkeeper initializer |
 | Redirect to an attacker | Exact match against registered URIs, except the port of a loopback redirect (RFC 8252); https or loopback only | `Oauth::RedirectUriPolicy` |
 | Authorization server mix-up | `iss` in every authorization response (RFC 9207) | Doorkeeper initializer |
 | A client lying about itself | Never-skipped consent showing the redirect host, with a warning for self-registered and loopback clients | `app/views/oauth/authorizations/new.html.erb` |

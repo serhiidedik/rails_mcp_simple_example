@@ -70,10 +70,9 @@
 
     <section id="token">
       <h2>How a client gets a token</h2>
-      <p>The first connection asks for the base scope only.</p>
+      <p>The first connection asks for every scope, so one consent covers every tool.</p>
       <%= render "sequence", sequence: DocsHelper::FIRST_CONNECTION %>
-      <p>When a tool needs more than the token holds, the client asks the person again. This is called step-up, and it means a client only ever holds the access it has used.</p>
-      <%= render "sequence", sequence: DocsHelper::STEP_UP %>
+      <p>A client that holds too little, because it asked for less or connected before a new tool was added, gets a <code>403</code> naming the scope, and asks the person once more.</p>
     </section>
 
     <section id="tools">
@@ -103,13 +102,12 @@
       <h2>Scopes</h2>
       <div class="table" tabindex="0" role="region" aria-label="All scopes">
         <table>
-          <thead><tr><th>Scope</th><th>The consent page says</th><th>Requested</th><th>Tools</th></tr></thead>
+          <thead><tr><th>Scope</th><th>The consent page says</th><th>Tools</th></tr></thead>
           <tbody>
             <% @reference.scopes.each do |scope| %>
               <tr>
                 <td><code><%= scope %></code></td>
                 <td><%= @reference.scope_label(scope) %></td>
-                <td><%= @reference.base_scope?(scope) ? "On first connection" : "On first use, through step-up" %></td>
                 <td>
                   <% @reference.tools_with_scope(scope).each do |tool| %>
                     <a href="#<%= tool.tool_name %>"><code><%= tool.tool_name %></code></a>

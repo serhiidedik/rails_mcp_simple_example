@@ -2,7 +2,7 @@ require "test_helper"
 
 # The journey of a real client, from nothing to a post being deleted.
 class McpOauthFlowTest < ActionDispatch::IntegrationTest
-  test "discovery, registration, consent, tool calls, step-up, refresh, revocation" do
+  test "discovery, registration, one consent for every tool, refresh, revocation" do
     # No token: the 401 points at the metadata.
     mcp_request("tools/list", token: nil)
     assert_response :unauthorized
@@ -24,30 +24,20 @@ class McpOauthFlowTest < ActionDispatch::IntegrationTest
     assert_response :created
     client = Doorkeeper::Application.by_uid(response.parsed_body["client_id"])
 
-    # Consent for the challenged scope: least privilege first.
+    # One consent, for everything the server offers.
     tokens = obtain_tokens(client, scope: challenged_scope, resource:)
-    assert_equal "posts:read", tokens["scope"]
+    assert_equal Doorkeeper.configuration.scopes.to_a.sort, tokens["scope"].split.sort
 
-    # Reading works.
-    assert tool_result("list_posts", token: tokens["access_token"])
+    # Every operation of every entity works with that one token.
+    token = tokens["access_token"]
+    assert tool_result("list_posts", token:)
+    created = tool_result("create_post", { title: "Hello" }, token:)
+    comment = tool_result("create_comment", { post_id: created["id"], body: "Hi" }, token:)
+    assert tool_result("list_comments", { post_id: created["id"] }, token:)
+    assert tool_result("delete_comment", { id: comment["id"] }, token:)
+    assert tool_result("delete_post", { id: posts(:two).id }, token:)
 
-    # Writing does not, and the client is told what to ask for.
-    call_tool("create_post", { title: "Hello" }, token: tokens["access_token"])
-    assert_response :forbidden
-    step_up_scope = www_authenticate[/scope="([^"]+)"/, 1]
-    assert_equal "posts:write", step_up_scope
-
-    # Step-up: the union of what it had and what the challenge asks for.
-    tokens = obtain_tokens(client, scope: "#{tokens["scope"]} #{step_up_scope}", resource:)
-    created = tool_result("create_post", { title: "Hello" }, token: tokens["access_token"])
-    assert_equal "Hello", created["title"]
-
-    # Deleting still needs its own scope.
-    call_tool("delete_post", { id: created["id"] }, token: tokens["access_token"])
-    assert_response :forbidden
-    assert_includes www_authenticate, %(scope="posts:delete")
-
-    # A refreshed token keeps working, and keeps its limits.
+    # A refreshed token keeps working.
     refresh(client, tokens["refresh_token"], resource:)
     assert_response :success
     refreshed = response.parsed_body
@@ -57,6 +47,16 @@ class McpOauthFlowTest < ActionDispatch::IntegrationTest
     post "/oauth/revoke", params: { token: refreshed["access_token"], client_id: client.uid }
     mcp_request("tools/list", token: refreshed["access_token"])
     assert_response :unauthorized
+  end
+
+  test "a client can still ask for less, and is held to it" do
+    client = create_public_client
+    tokens = obtain_tokens(client, scope: "posts:read")
+    assert_equal "posts:read", tokens["scope"]
+
+    call_tool("create_post", { title: "Hello" }, token: tokens["access_token"])
+    assert_response :forbidden
+    assert_includes www_authenticate, %(scope="posts:write")
   end
 
   private

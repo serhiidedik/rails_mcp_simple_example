@@ -2,7 +2,7 @@
 # End-to-end check of the MCP server with the official SDK client, an implementation this app
 # does not control. It runs the journey a real client takes, over real HTTP: discovery, dynamic
 # registration, PKCE, login and consent through the real HTML forms with real CSRF tokens, the
-# iss check, tool calls, and step-up authorization when a tool needs more than was granted.
+# iss check, and every tool working after one consent.
 #
 #   docker compose run --rm mcp-check
 #
@@ -117,9 +117,9 @@ end
 
 # --- The server refuses what it must refuse ------------------------------------------------
 
-check("no token: 401 with the metadata URL and the base scope") do
+check("no token: 401 with the metadata URL and every scope") do
   response = raw_mcp_status({})
-  response.code == "401" && response["www-authenticate"].include?("resource_metadata=") && response["www-authenticate"].include?('scope="posts:read"')
+  response.code == "401" && response["www-authenticate"].include?("resource_metadata=") && response["www-authenticate"].include?("posts:read") && response["www-authenticate"].include?("comments:delete")
 end
 
 check("bogus token: 401 invalid_token") do
@@ -155,7 +155,7 @@ check("connect: discovery, registration, login, consent, token") do
   browser.consents == 1
 end
 
-check("the first consent asked for the base scope only") { browser.approved_scopes == [ "posts:read" ] }
+check("the one consent asked for every scope") { browser.approved_scopes.first.split.size == 6 && browser.approved_scopes.first.include?("comments:delete") }
 
 puts "      negotiated protocol version: #{client.protocol_version}"
 
@@ -178,17 +178,15 @@ structured = ->(response) do
   result["structuredContent"]
 end
 
-check("list_posts works with the base scope") { structured.call(client.call_tool(tool: tool.call("list_posts"), arguments: { limit: 5 })).key?("posts") }
+check("list_posts works") { structured.call(client.call_tool(tool: tool.call("list_posts"), arguments: { limit: 5 })).key?("posts") }
 
-created = check("create_post: 403, step-up, a second consent, then success") do
+created = check("create_post works, with no new consent") do
   post = structured.call(client.call_tool(tool: tool.call("create_post"), arguments: { title: "Written by the SDK client", body: "Hello" }))
-  browser.consents == 2 && post["title"] == "Written by the SDK client" && post
+  browser.consents == 1 && post["title"] == "Written by the SDK client" && post
 end
 
-check("step-up asked for the union of the old and the new scope") { browser.approved_scopes.last.split.sort == %w[ posts:read posts:write ] }
-
-check("get_post returns it, with no new consent") do
-  structured.call(client.call_tool(tool: tool.call("get_post"), arguments: { id: created["id"] })) == created && browser.consents == 2
+check("get_post returns it") do
+  structured.call(client.call_tool(tool: tool.call("get_post"), arguments: { id: created["id"] })) == created && browser.consents == 1
 end
 
 check("update_post changes only what was passed") do
@@ -201,31 +199,31 @@ check("a validation failure is a readable tool error") do
   result["isError"] == true && result["content"].first["text"].include?("can't be blank")
 end
 
-comment = check("create_comment: a third consent for its own scope, then success") do
+comment = check("create_comment works, with no new consent") do
   added = structured.call(client.call_tool(tool: tool.call("create_comment"), arguments: { post_id: created["id"], body: "First" }))
-  browser.consents == 3 && added["post_id"] == created["id"] && added
+  browser.consents == 1 && added["post_id"] == created["id"] && added
 end
 
-check("list_comments: a fourth consent, and it lists the comment") do
+check("list_comments lists the comment") do
   listed = structured.call(client.call_tool(tool: tool.call("list_comments"), arguments: { post_id: created["id"] }))
-  browser.consents == 4 && listed["comments"] == [ comment ]
+  browser.consents == 1 && listed["comments"] == [ comment ]
 end
 
-check("update_comment and get_comment need no new consent") do
+check("update_comment and get_comment work") do
   structured.call(client.call_tool(tool: tool.call("update_comment"), arguments: { id: comment["id"], body: "Edited" }))
-  structured.call(client.call_tool(tool: tool.call("get_comment"), arguments: { id: comment["id"] }))["body"] == "Edited" && browser.consents == 4
+  structured.call(client.call_tool(tool: tool.call("get_comment"), arguments: { id: comment["id"] }))["body"] == "Edited" && browser.consents == 1
 end
 
-check("delete_comment: a fifth consent, then success") do
+check("delete_comment works") do
   deleted = structured.call(client.call_tool(tool: tool.call("delete_comment"), arguments: { id: comment["id"] }))
-  deleted == { "id" => comment["id"], "deleted" => true } && browser.consents == 5
+  deleted == { "id" => comment["id"], "deleted" => true } && browser.consents == 1
 end
 
 orphan = structured.call(client.call_tool(tool: tool.call("create_comment"), arguments: { post_id: created["id"], body: "Goes with the post" }))
 
-check("delete_post: a sixth consent for its own scope, then success") do
+check("delete_post works") do
   deleted = structured.call(client.call_tool(tool: tool.call("delete_post"), arguments: { id: created["id"] }))
-  deleted == { "id" => created["id"], "deleted" => true } && browser.consents == 6
+  deleted == { "id" => created["id"], "deleted" => true } && browser.consents == 1
 end
 
 check("its comments went with it") do
@@ -235,5 +233,7 @@ end
 check("the post is gone: a tool error, not a crash") do
   client.call_tool(tool: tool.call("get_post"), arguments: { id: created["id"] })["result"]["isError"] == true
 end
+
+check("one consent covered all ten tools") { browser.consents == 1 }
 
 puts "\nAll checks passed."

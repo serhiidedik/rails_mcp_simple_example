@@ -15,7 +15,7 @@
 class ApplicationTool < MCP::Tool
   class << self
     # The OAuth scope a token needs to call this tool. McpEndpoint reads it to answer with
-    # an HTTP 403 step-up challenge; #call enforces it again, so no path can skip the check.
+    # an HTTP 403 challenge; #call enforces it again, so no path can skip the check.
     def required_scope(scope = nil)
       return @required_scope || raise(NotImplementedError, "#{name} must declare a required_scope") if scope.nil?
 

@@ -86,7 +86,7 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
   end
 
   test "defaults to the base scope when the client asks for none" do
-    assert_equal "posts:read", obtain_tokens(@client, scope: nil)["scope"]
+    assert_equal Doorkeeper.configuration.scopes.to_a.sort, obtain_tokens(@client, scope: nil)["scope"].split.sort
   end
 
   test "an unknown scope is refused" do
