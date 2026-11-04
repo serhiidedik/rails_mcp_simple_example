@@ -21,7 +21,10 @@ Rails.application.routes.draw do
   end
 
   # Ids are digits only, so anything else stays a 404 instead of an input error.
-  resources :posts, constraints: { id: /\d+/ }
+  resources :posts, constraints: { id: /\d+/ } do
+    # Shallow: a comment is created and listed under its post, and has its own URL after that.
+    resources :comments, shallow: true, constraints: { id: /\d+/ }
+  end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

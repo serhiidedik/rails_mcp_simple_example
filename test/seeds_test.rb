@@ -4,18 +4,28 @@ class SeedsTest < ActiveSupport::TestCase
   DEMO_USER = { "SEED_USER_EMAIL" => "seed-test@example.com", "SEED_USER_PASSWORD" => "a-long-enough-password" }.freeze
 
   test "development gets the configured demo user and unique sample posts, once" do
-    Post.delete_all
+    Post.destroy_all
 
-    assert_difference -> { User.count } => 1, -> { Post.count } => 10 do
+    assert_difference -> { User.count } => 1, -> { Post.count } => 10, -> { Comment.count } => 30 do
       capture_io { seed_as_development(DEMO_USER) }
     end
     assert User.authenticate_by(email_address: DEMO_USER["SEED_USER_EMAIL"], password: DEMO_USER["SEED_USER_PASSWORD"])
     assert_equal 10, Post.distinct.count(:title)
     assert_equal 10, Post.distinct.count(:body)
     assert Post.all.all?(&:valid?)
+    assert Post.all.all? { |post| post.comments.size == 3 }
+    assert Comment.all.all?(&:valid?)
 
-    assert_no_difference [ "User.count", "Post.count" ] do
+    assert_no_difference [ "User.count", "Post.count", "Comment.count" ] do
       capture_io { seed_as_development(DEMO_USER) }
+    end
+  end
+
+  test "posts that already exist get comments too" do
+    Comment.delete_all
+
+    assert_no_difference("Post.count") do
+      assert_difference("Comment.count", Post.count * 3) { capture_io { seed_as_development(DEMO_USER) } }
     end
   end
 

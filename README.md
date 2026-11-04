@@ -13,10 +13,10 @@ flowchart LR
     subgraph app [Rails app]
         endpoint["McpEndpoint<br/>POST /mcp"]
         oauth["Doorkeeper<br/>/oauth/*"]
-        tools["Tools<br/>app/mcp/posts"]
-        controller["PostsController<br/>/posts"]
-        interactions["Interactions<br/>app/interactions/posts"]
-        post[(Post)]
+        tools["Tools<br/>app/mcp"]
+        controller["REST controllers<br/>/posts, /comments"]
+        interactions["Interactions<br/>app/interactions"]
+        post[(Models)]
     end
 
     client -- bearer token --> endpoint
@@ -44,7 +44,7 @@ The first start creates the database, the demo user from `.env` and ten sample p
 **1. Read the reference.** Open <http://localhost:3000/>.
 
 **2. Check that everything works.** In a second terminal, this runs the official SDK client through
-sign-in, consent and all five tools, and prints one line per check:
+sign-in, consent and all ten tools, and prints one line per check:
 
 ```sh
 docker compose run --rm mcp-check
@@ -181,7 +181,12 @@ when the path changes.
 | `get_post` | `posts:read` | One post |
 | `create_post` | `posts:write` | Creates a post |
 | `update_post` | `posts:write` | Changes the given fields |
-| `delete_post` | `posts:delete` | Permanently deletes a post |
+| `delete_post` | `posts:delete` | Permanently deletes a post and its comments |
+| `list_comments` | `comments:read` | One page of the comments of a post, newest first |
+| `get_comment` | `comments:read` | One comment |
+| `create_comment` | `comments:write` | Adds a comment to a post |
+| `update_comment` | `comments:write` | Replaces the body of a comment |
+| `delete_comment` | `comments:delete` | Permanently deletes a comment |
 
 A client first asks for `posts:read` only. When it calls a tool that needs more, it gets an
 HTTP 403 naming the scope, asks the person again, and retries (step-up authorization).
@@ -190,6 +195,8 @@ HTTP 403 naming the scope, asks the person again, and retries (step-up authoriza
 |---|---|
 | `GET /`, `GET /docs/tools.json` | The API reference, public and free of data |
 | `POST /mcp` | The MCP endpoint |
+| `/posts`, `/posts/:id` | REST for posts |
+| `/posts/:post_id/comments`, `/comments/:id` | REST for comments: list and create under the post, the rest on the comment |
 | `GET /.well-known/oauth-protected-resource/mcp` | Which authorization server protects `/mcp` (RFC 9728) |
 | `GET /.well-known/oauth-authorization-server` | Authorization server metadata (RFC 8414) |
 | `GET /oauth/authorize`, `POST /oauth/token`, `POST /oauth/revoke` | OAuth 2.1 |
@@ -202,7 +209,7 @@ HTTP 403 naming the scope, asks the person again, and retries (step-up authoriza
 |---|---|
 | `app/interactions/` | The operations. All business logic, used by REST and MCP alike |
 | `app/mcp/application_tool.rb` | Base tool: scope check, result mapping, audit log |
-| `app/mcp/posts/` | One thin tool per operation, plus the output schema |
+| `app/mcp/posts/`, `app/mcp/comments/` | One thin tool per operation, plus the output schema |
 | `app/mcp/mcp_endpoint.rb` | Per-request wiring, and the allowlist of exposed tools |
 | `app/mcp/doorkeeper_token_verifier.rb` | The only link between MCP and the authorization server |
 | `app/mcp/mcp_api_reference.rb`, `app/controllers/docs_controller.rb`, `app/views/docs/` | The API reference at `/` |
@@ -212,55 +219,138 @@ HTTP 403 naming the scope, asks the person again, and retries (step-up authoriza
 | `config/initializers/rack_attack.rb` | Every rate limit |
 | `config/mcp.yml` | Public URL, server identity, base scope, allowed origins |
 
-## Reusing it
+## Add a new entity to MCP
 
-**Expose another model.** Write the operations as interactions, then one tool per operation:
+A model is not reachable through MCP until you add its tools to an allowlist, so nothing is exposed by
+accident. Comments were added exactly this way, so the files below are real and you can copy them.
+
+**1. Decide two things first.**
+
+- **Scopes:** one each for read, write and delete gives the least privilege, at the cost of more consent
+  screens. Comments use `comments:read`, `comments:write` and `comments:delete`.
+- **Ownership:** scopes say what a client may do, not to which records. If a person should only touch
+  their own records, add that now: the user id is `server_context.auth_info.subject`.
+
+**2. Create the model and its relation.** Use `scaffold` for REST endpoints too, or `model` for MCP only.
+
+```sh
+bin/rails generate scaffold Comment post:references body:text
+```
+
+In the migration, make required columns `null: false`. Then set the relation on both sides:
+
+```ruby
+# app/models/comment.rb
+class Comment < ApplicationRecord
+  BODY_MAX_LENGTH = 10_000
+
+  belongs_to :post
+
+  validates :body, presence: true, length: { maximum: BODY_MAX_LENGTH }
+end
+
+# app/models/post.rb
+has_many :comments, dependent: :destroy
+```
+
+For nested REST routes, and a thin controller, see `config/routes.rb` and `app/controllers/comments_controller.rb`.
+
+**3. Write one interaction per operation** in `app/interactions/comments/`. All the logic lives here, and
+both REST and MCP call it. An expected failure goes into `errors`, and a missing record raises
+`RecordNotFound`, which the tool and the controller both turn into the right answer.
 
 ```ruby
 # app/interactions/comments/create.rb
 module Comments
   class Create < ApplicationInteraction
     integer :post_id
-    string :text
+    string :body, default: nil, strip: false
 
     def execute
-      comment = Comment.new(inputs)
+      comment = Post.find(post_id).comments.new(body:)
       errors.merge!(comment.errors) unless comment.save
       comment
     end
   end
 end
+```
 
+For a list, `include KeysetPagination` and return `paginate(scope)`: see `app/interactions/comments/list.rb`.
+
+**4. Describe what the tools return**, once, in `app/mcp/comments/tool_payload.rb`: an output schema, a
+serializer that matches it, and an example.
+
+**5. Write one thin tool per operation** in `app/mcp/comments/`. It declares its contract and calls the
+interaction. The base class handles the scope check, errors and the audit log.
+
+```ruby
 # app/mcp/comments/create_tool.rb
 module Comments
   class CreateTool < ApplicationTool
     tool_name "create_comment"
+    title "Create comment"
     description "Adds a comment to a post."
     required_scope "comments:write"
     annotations(read_only_hint: false, destructive_hint: false, idempotent_hint: false, open_world_hint: false)
     input_schema(
-      properties: { post_id: { type: "integer" }, text: { type: "string", maxLength: 2000 } },
-      required: %w[ post_id text ],
+      properties: {
+        post_id: { type: "integer", minimum: 1 },
+        body: { type: "string", minLength: 1, maxLength: Comment::BODY_MAX_LENGTH }
+      },
+      required: %w[ post_id body ],
       additionalProperties: false
     )
-    output_schema(
-      properties: { id: { type: "integer" }, text: { type: "string" } },
-      required: %w[ id text ],
-      additionalProperties: false
-    )
-    example arguments: { post_id: 1, text: "Nice" }, result: { id: 1, text: "Nice" }
+    output_schema(ToolPayload::COMMENT)
+    example arguments: { post_id: 1, body: "Nice post" }, result: ToolPayload::EXAMPLE
 
     def self.perform(**arguments)
-      respond_with(Create.run(arguments)) { |comment| { id: comment.id, text: comment.text } }
+      respond_with(Create.run(arguments)) { |comment| ToolPayload.comment(comment) }
     end
   end
 end
 ```
 
-Then add the tool to `McpEndpoint::TOOLS`, the scope to `optional_scopes` in the Doorkeeper
-initializer, and its label to `config/locales/oauth.en.yml`, and run `bin/rails mcp:docs`. The new tool
-appears on the page at `/` by itself. `test/integration/mcp_tools_test.rb` checks that every listed tool
-declares a known scope and a closed input schema, and `mcp_api_reference_test.rb` calls its example.
+Set the annotations honestly, because clients use them to decide when to ask a person first: an update
+that overwrites content is destructive. Models read the descriptions, so say what the tool does and what
+it cannot do. The body is written by users, so `McpEndpoint::INSTRUCTIONS` should tell clients to treat it
+as data.
+
+**6. Expose the tools** by adding them to `TOOLS` in `app/mcp/mcp_endpoint.rb`.
+
+**7. Add the scopes** to `optional_scopes` in `config/initializers/doorkeeper.rb`, and the text the consent
+page shows to `config/locales/oauth.en.yml`.
+
+**8. Regenerate the contract.** The tools now appear on the page at `/` by themselves.
+
+```sh
+bin/rails mcp:docs
+```
+
+**9. Add tests.** Add a fixture named `one` to `test/fixtures/comments.yml`, and the shared tests will call
+your documented examples against it. Copy `test/integration/mcp_comment_tools_test.rb` for the rest:
+the lifecycle, missing records, validation errors and each scope.
+
+**10. Add seeds, then try it.** Add sample records to `db/seeds.rb`. Restart to load the new folders and
+initializer, and to run the migration and seeds, then open `/`:
+
+```sh
+docker compose restart web
+```
+
+**If you miss a step**, this is what tells you:
+
+| You forgot | What happens |
+|---|---|
+| Step 6, `TOOLS` | The tool does not exist for clients. No test fails, because being left out is the safe default |
+| `example`, or a closed `input_schema` | `mcp_tools_test.rb` or `mcp_api_reference_test.rb` fails, and the page at `/` raises an error for a missing example |
+| Step 7, the scope | `mcp_tools_test.rb` fails: the tool needs an unknown scope |
+| Step 7, the consent text | `mcp_tools_test.rb` fails: the scope has no label |
+| Step 8, `mcp:docs` | `mcp_api_reference_test.rb` fails: `docs/mcp-tools.json` is stale |
+| A wrong example | `mcp_api_reference_test.rb` fails: it calls each example on the real endpoint |
+
+## Reusing it
+
+**Expose another model.** See [Add a new entity to MCP](#add-a-new-entity-to-mcp).
 
 **Use an external identity provider (Keycloak, Auth0, ...).** Replace `DoorkeeperTokenVerifier` in
 `McpEndpoint` with the SDK's `MCP::Server::OAuth::JWTVerifier` or `IntrospectionVerifier`, and point
@@ -295,10 +385,10 @@ No tool changes.
 
 ## Before you deploy
 
-1. **Protect or remove the REST API.** `/posts` has no authentication, as generated by the scaffold.
+1. **Protect or remove the REST API.** `/posts` and `/comments` have no authentication, as generated by the scaffold.
    Anyone can read and change what MCP protects with OAuth.
-2. **Decide who may touch which post.** Scopes say what a client may do, and any signed-in person
-   can approve any scope for all posts. Posts have no owner in this sample. For per-record rules, pass
+2. **Decide who may touch which record.** Scopes say what a client may do, and any signed-in person
+   can approve any scope for all records. Posts and comments have no owner in this sample. For per-record rules, pass
    the user into the interactions (`auth_info.subject` holds the user id).
 3. Set `MCP_PUBLIC_URL` (see `.env.example`). The app refuses to boot without an https URL.
 4. Create the accounts, since there is no sign-up: `User.create!(email_address:, password:)`.

@@ -38,7 +38,7 @@ Doorkeeper.configure do
 
   # --- Scopes -----------------------------------------------------------------------------
   default_scopes "posts:read"
-  optional_scopes "posts:write", "posts:delete"
+  optional_scopes "posts:write", "posts:delete", "comments:read", "comments:write", "comments:delete"
   enforce_configured_scopes
 
   # --- Audience binding (RFC 8707) --------------------------------------------------------

@@ -3,4 +3,7 @@ en:
     scopes:
       "posts:read": Read posts
       "posts:write": Create and edit posts
-      "posts:delete": Delete posts
+      "posts:delete": Delete posts and their comments
+      "comments:read": Read comments
+      "comments:write": Add and edit comments
+      "comments:delete": Delete comments

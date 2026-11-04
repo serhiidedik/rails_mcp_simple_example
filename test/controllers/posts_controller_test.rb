@@ -37,7 +37,7 @@ class PostsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "index paginates and links to the next page" do
-    Post.delete_all
+    Post.destroy_all
     created = Array.new(3) { |i| Post.create!(title: "Post #{i}") }
 
     get posts_url(limit: 2), as: :json

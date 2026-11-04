@@ -84,10 +84,7 @@ class McpApiReferenceTest < ActionDispatch::IntegrationTest
 
   McpEndpoint::TOOLS.each do |tool|
     test "the documented example of #{tool.tool_name} works against the real endpoint" do
-      arguments = tool.example.fetch(:arguments)
-      arguments = arguments.merge(id: posts(:one).id) if arguments.key?(:id)
-
-      actual = tool_result(tool.tool_name, arguments, token: issue_token)
+      actual = tool_result(tool.tool_name, with_real_ids(tool), token: issue_token)
       documented = tool.example.fetch(:result).deep_stringify_keys
 
       assert_nothing_raised { tool.output_schema.validate_result(documented) }
@@ -95,10 +92,12 @@ class McpApiReferenceTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "the documented list cursor is one the server accepts" do
-    cursor = Posts::ListTool.example.fetch(:result).fetch(:next_cursor)
+  [ Posts::ListTool, Comments::ListTool ].each do |tool|
+    test "the documented cursor of #{tool.tool_name} is one the server accepts" do
+      cursor = tool.example.fetch(:result).fetch(:next_cursor)
 
-    assert tool_result("list_posts", { cursor: }, token: issue_token).key?("posts")
+      assert_not tool_result(tool.tool_name, with_real_ids(tool).merge(cursor:), token: issue_token).nil?
+    end
   end
 
   test "mcp:dev_token refuses to run outside development" do
@@ -106,6 +105,20 @@ class McpApiReferenceTest < ActionDispatch::IntegrationTest
 
     assert_no_difference -> { Doorkeeper::AccessToken.count } do
       assert_raises(SystemExit) { capture_io { Rake::Task["mcp:dev_token"].execute } }
+    end
+  end
+
+  private
+
+  # Examples say id: 1. This points them at the fixture named `one` of the tool's own entity, so a
+  # new entity needs a fixture, and no change here.
+  def with_real_ids(tool)
+    tool.example.fetch(:arguments).to_h do |name, value|
+      case name
+      when :id then [ name, public_send(tool.name.deconstantize.underscore, :one).id ]
+      when /\A(.+)_id\z/ then [ name, public_send($1.pluralize, :one).id ]
+      else [ name, value ]
+      end
     end
   end
 end
