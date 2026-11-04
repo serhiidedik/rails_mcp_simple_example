@@ -280,7 +280,7 @@ No tool changes.
 | A stolen token | 1 hour access tokens, refresh tokens that rotate on every use, immediate revocation | Doorkeeper initializer |
 | A database leak | Tokens stored as SHA-256 digests, client secrets and passwords with bcrypt | Doorkeeper initializer, `User` |
 | Too much access | Least privilege per tool, the scope checked at the HTTP layer and again in the tool | `ApplicationTool`, `McpEndpoint` |
-| Redirect to an attacker | Exact match against registered URIs, https or loopback only | `Oauth::RedirectUriPolicy` |
+| Redirect to an attacker | Exact match against registered URIs, except the port of a loopback redirect (RFC 8252); https or loopback only | `Oauth::RedirectUriPolicy` |
 | Authorization server mix-up | `iss` in every authorization response (RFC 9207) | Doorkeeper initializer |
 | A client lying about itself | Never-skipped consent showing the redirect host, with a warning for self-registered and loopback clients | `app/views/oauth/authorizations/new.html.erb` |
 | DNS rebinding, forged Host | Origin and Host validated by the transport; `config.hosts` in production | `McpEndpoint`, `production.rb` |
@@ -314,5 +314,5 @@ No tool changes.
 - **No CORS.** Clients running in a browser cannot call the API until `rack-cors` is added for the
   origins in `MCP_ALLOWED_ORIGINS`. Desktop, CLI and server-side clients are unaffected.
 - **Refresh token reuse** is refused, but does not revoke the rest of that client's tokens.
-- **Client ID Metadata Documents** are covered by tests against a local socket and stubbed DNS. Fetching
-  from a real https host has not been exercised.
+- **Client ID Metadata Documents** have been exercised against one real host's published document, and otherwise by tests against a
+  local socket and stubbed DNS.
