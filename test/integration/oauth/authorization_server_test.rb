@@ -291,6 +291,58 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
     assert_nil session[:user_id]
   end
 
+  # A browser posts `Origin: null` from a page sent with `Referrer-Policy: no-referrer`, and Rails
+  # refuses that. Sign-in once failed for every real browser this way, with this suite green, as it
+  # had CSRF protection off and sent no Origin. So: protection on, Origin as a browser derives it.
+
+  test "a browser signs in and approves a client, with CSRF protection on" do
+    with_forgery_protection do
+      get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+      follow_redirect!
+
+      submit_form_with_button("Sign in", email_address: users(:alice).email_address, password: PASSWORD)
+      assert_response :see_other, "sign-in was refused: #{response.body[0, 300]}"
+      follow_redirect!
+
+      submit_form_with_button("Allow")
+      assert_response :redirect
+      assert redirect_query["code"].present?, response.location
+    end
+  end
+
+  test "a browser denies a client and signs out, with CSRF protection on" do
+    with_forgery_protection do
+      get "/oauth/login"
+      submit_form_with_button("Sign in", email_address: users(:alice).email_address, password: PASSWORD)
+
+      get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+      submit_form_with_button("Deny")
+      assert_equal "access_denied", redirect_query["error"]
+
+      get "/oauth/authorize", params: authorization_params(@client, challenge: @challenge)
+      submit_form_with_button("Use another account")
+      assert_response :see_other
+      assert_nil session[:user_id]
+    end
+  end
+
+  test "a sign-in posted from another site is refused, even with a valid token" do
+    with_forgery_protection do
+      get "/oauth/login"
+
+      submit_form_with_button("Sign in", origin: "https://evil.example", email_address: users(:alice).email_address, password: PASSWORD)
+
+      assert_response :unprocessable_content
+      assert_nil session[:user_id]
+    end
+  end
+
+  test "the icon every browser asks for is answered, not a routing error" do
+    get "/favicon.ico"
+
+    assert_response :no_content
+  end
+
   test "no page relies on a method override, which this stack does not have" do
     get "/oauth/login"
     assert_empty css_select("input[name=_method]")
@@ -337,7 +389,7 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
 
     assert_includes response.headers["Content-Security-Policy"], "frame-ancestors 'none'"
     assert_includes response.headers["Content-Security-Policy"], "default-src 'none'"
-    assert_equal "no-referrer", response.headers["Referrer-Policy"]
+    assert_equal "same-origin", response.headers["Referrer-Policy"]
     assert_equal "no-store", response.headers["Cache-Control"]
   end
 
@@ -369,13 +421,18 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
 
   private
 
-  def submit_form_with_button(label)
+  # Submits the rendered form the way a browser does: its hidden fields, what the person typed, and
+  # the Origin header the current page's Referrer-Policy produces (Fetch standard, "serializing a
+  # request origin": a no-referrer page posts `Origin: null`).
+  def submit_form_with_button(label, origin: nil, **typed)
+    origin ||= response.headers["Referrer-Policy"] == "no-referrer" ? "null" : request.base_url
     form = css_select("form").find { |candidate| candidate.css("input[type=submit],button").any? { |button| [ button["value"], button.text ].include?(label) } }
     assert form, "no form with a #{label.inspect} button in: #{response.body}"
     assert_equal "post", form["method"].to_s.downcase
 
     fields = form.css("input[type=hidden]").each_with_object(Hash.new { |hash, key| hash[key] = [] }) { |input, all| all[input["name"]] << input["value"].to_s }
-    post form["action"], params: fields.to_h { |name, values| name.end_with?("[]") ? [ name.delete_suffix("[]"), values ] : [ name, values.last ] }
+    params = fields.to_h { |name, values| name.end_with?("[]") ? [ name.delete_suffix("[]"), values ] : [ name, values.last ] }
+    post form["action"], params: params.merge(typed), headers: { "Origin" => origin }
   end
 
   def with_forgery_protection
