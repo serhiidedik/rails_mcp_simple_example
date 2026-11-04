@@ -31,6 +31,7 @@ Rails.application.routes.draw do
   # Browsers ask for this on every first visit. Answering keeps a routing error out of the logs.
   get "favicon.ico", to: ->(_env) { [ 204, { "cache-control" => "public, max-age=86400" }, [] ] }
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # The reference for this server. Public, and holds no data: see DocsController.
+  root "docs#show"
+  get "docs/tools.json", to: "docs#tools", format: false, as: :docs_tools
 end

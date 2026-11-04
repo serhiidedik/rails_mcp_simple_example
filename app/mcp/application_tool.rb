@@ -6,6 +6,7 @@
 #     tool_name "get_post"
 #     required_scope "posts:read"
 #     input_schema(...)
+#     example arguments: { id: 1 }, result: { id: 1, title: "Hello" }
 #
 #     def self.perform(id:)
 #       respond_with(Posts::Find.run(id:)) { |post| Posts::ToolPayload.post(post) }
@@ -19,6 +20,14 @@ class ApplicationTool < MCP::Tool
       return @required_scope || raise(NotImplementedError, "#{name} must declare a required_scope") if scope.nil?
 
       @required_scope = scope
+    end
+
+    # A sample call for the reference at GET /. Clients never receive it, and a test runs it
+    # against the real endpoint, so it cannot go stale.
+    def example(arguments: nil, result: nil)
+      return @example || raise(NotImplementedError, "#{name} must declare an example") if arguments.nil?
+
+      @example = { arguments:, result: }
     end
 
     def call(server_context:, **arguments)

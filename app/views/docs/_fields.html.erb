@@ -1,0 +1,15 @@
+<div class="table" tabindex="0" role="region" aria-label="<%= label %>">
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Notes</th></tr></thead>
+    <tbody>
+      <% fields.each do |field| %>
+        <tr>
+          <td><code><%= field.name %></code></td>
+          <td><%= field.type %></td>
+          <td><%= field.required ? "Yes" : "No" %></td>
+          <td class="wrap"><%= field.notes %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
