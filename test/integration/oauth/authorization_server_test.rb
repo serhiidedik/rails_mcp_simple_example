@@ -23,7 +23,7 @@ class Oauth::AuthorizationServerTest < ActionDispatch::IntegrationTest
     assert_equal [ "query" ], metadata["response_modes_supported"]
     assert_equal %w[ authorization_code refresh_token ].sort, metadata["grant_types_supported"].sort
     assert_equal %w[ client_secret_basic none ].sort, metadata["token_endpoint_auth_methods_supported"].sort
-    assert_equal %w[ posts:delete posts:read posts:write ].sort, metadata["scopes_supported"].sort
+    assert_equal Doorkeeper.configuration.scopes.to_a.sort, metadata["scopes_supported"].sort
     assert_equal true, metadata["authorization_response_iss_parameter_supported"]
     assert_equal true, metadata["client_id_metadata_document_supported"]
     assert_not metadata.key?("introspection_endpoint")

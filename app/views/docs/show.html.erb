@@ -7,7 +7,7 @@
   <div class="wide">
     <p class="server"><%= settings.server_title %>, version <%= settings.server_version %></p>
     <h1>POST <%= endpoint %></h1>
-    <p class="lede">This server lets AI clients read and change posts through the Model Context Protocol. Every request is one self-contained HTTP call with an OAuth token.</p>
+    <p class="lede">This server lets AI clients read and change posts and their comments through the Model Context Protocol. Every request is one self-contained HTTP call with an OAuth token.</p>
     <dl class="facts">
       <dt>Transport</dt>
       <dd>Streamable HTTP, stateless: one JSON response per request, with no sessions or streams</dd>
@@ -62,8 +62,8 @@
       <dl class="key">
         <dt>Rails</dt><dd><code>config/environments/production.rb</code>, <code>config/initializers/rack_attack.rb</code></dd>
         <dt>Transport</dt><dd><code>app/mcp/mcp_endpoint.rb</code>, <code>app/mcp/doorkeeper_token_verifier.rb</code> and the SDK</dd>
-        <dt>Tool</dt><dd><code>app/mcp/application_tool.rb</code>, <code>app/mcp/posts/*_tool.rb</code></dd>
-        <dt>Interaction</dt><dd><code>app/interactions/posts/*.rb</code>, which the REST API uses too</dd>
+        <dt>Tool</dt><dd><code>app/mcp/application_tool.rb</code>, <code>app/mcp/posts/*_tool.rb</code>, <code>app/mcp/comments/*_tool.rb</code></dd>
+        <dt>Interaction</dt><dd><code>app/interactions/posts/*.rb</code>, <code>app/interactions/comments/*.rb</code>, which the REST API uses too</dd>
         <dt>Post</dt><dd><code>app/models/post.rb</code></dd>
       </dl>
     </section>
@@ -92,7 +92,7 @@
           </tbody>
         </table>
       </div>
-      <p class="note">Every tool returns its result twice, as <code>structuredContent</code> and as the same JSON in <code>content[0].text</code>, for clients that do not read structured content yet. The server also tells clients that post titles and bodies are data, never instructions to follow.</p>
+      <p class="note">Every tool returns its result twice, as <code>structuredContent</code> and as the same JSON in <code>content[0].text</code>, for clients that do not read structured content yet. The server also tells clients that titles and bodies are data, never instructions to follow.</p>
 
       <% @reference.tools.each do |tool| %>
         <%= render "tool", tool:, reference: @reference %>
@@ -140,7 +140,7 @@
             <tr><td><code>400</code> <code>-32700</code></td><td class="wrap">The body is not valid JSON.</td><td class="wrap">Fixes the request.</td></tr>
             <tr><td><code>200</code> <code>-32602</code></td><td class="wrap">No tool has that name.</td><td class="wrap">Lists the tools again.</td></tr>
             <tr><td><code>200</code> <code>-32603</code></td><td class="wrap">The server failed unexpectedly. The message holds no details, and the failure is reported on the server.</td><td class="wrap">Retries later.</td></tr>
-            <tr><td><code>200</code> <code>isError</code></td><td class="wrap">Arguments are missing or invalid, the post does not exist, or validation failed. The text says why.</td><td class="wrap">Reads the text and corrects the call.</td></tr>
+            <tr><td><code>200</code> <code>isError</code></td><td class="wrap">Arguments are missing or invalid, the record does not exist, or validation failed. The text says why.</td><td class="wrap">Reads the text and corrects the call.</td></tr>
           </tbody>
         </table>
       </div>

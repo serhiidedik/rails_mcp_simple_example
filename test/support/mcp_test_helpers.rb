@@ -3,7 +3,7 @@ module McpTestHelpers
   LEGACY_PROTOCOL_VERSION = "2025-11-25".freeze
   MODERN_PROTOCOL_VERSION = "2026-07-28".freeze
 
-  def issue_token(scopes: "posts:read posts:write posts:delete", resource: Oauth::ResourceIndicator.canonical, user: users(:alice), **attributes)
+  def issue_token(scopes: Doorkeeper.configuration.scopes.to_s, resource: Oauth::ResourceIndicator.canonical, user: users(:alice), **attributes)
     Doorkeeper::AccessToken.create!(
       application: create_public_client,
       resource_owner_id: user.id,

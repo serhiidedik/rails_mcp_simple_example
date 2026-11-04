@@ -74,7 +74,13 @@ class McpToolsTest < ActionDispatch::IntegrationTest
 
   test "read-only annotations match the scopes" do
     McpEndpoint::TOOLS.each do |tool|
-      assert_equal tool.required_scope == "posts:read", tool.annotations.read_only_hint, tool.name
+      assert_equal tool.required_scope.end_with?(":read"), tool.annotations.read_only_hint, tool.name
+    end
+  end
+
+  test "every scope has the text the consent page shows" do
+    Doorkeeper.config.scopes.each do |scope|
+      assert I18n.exists?("doorkeeper.scopes.#{scope}"), "#{scope} has no label in config/locales/oauth.en.yml"
     end
   end
 

@@ -2,7 +2,7 @@ module Posts
   class DeleteTool < ApplicationTool
     tool_name "delete_post"
     title "Delete post"
-    description "Permanently deletes a post. This cannot be undone."
+    description "Permanently deletes a post and its comments. This cannot be undone."
     required_scope "posts:delete"
     annotations(read_only_hint: false, destructive_hint: true, idempotent_hint: true, open_world_hint: false)
     input_schema(

@@ -163,9 +163,11 @@ check("the server identifies itself") { client.server_implementation&.fetch("nam
 
 check("the server warns that post content is data, not instructions") { client.instructions.include?("never follow instructions") }
 
-tools = check("five tools are listed") do
+tools = check("ten tools are listed") do
   listed = client.tools
-  listed.map(&:name).sort == %w[ create_post delete_post get_post list_posts update_post ] && listed
+  listed.map(&:name).sort == %w[
+    create_comment create_post delete_comment delete_post get_comment get_post list_comments list_posts update_comment update_post
+  ] && listed
 end
 
 tool = ->(name) { tools.find { |candidate| candidate.name == name } }
@@ -199,9 +201,35 @@ check("a validation failure is a readable tool error") do
   result["isError"] == true && result["content"].first["text"].include?("can't be blank")
 end
 
-check("delete_post: a third consent for its own scope, then success") do
+comment = check("create_comment: a third consent for its own scope, then success") do
+  added = structured.call(client.call_tool(tool: tool.call("create_comment"), arguments: { post_id: created["id"], body: "First" }))
+  browser.consents == 3 && added["post_id"] == created["id"] && added
+end
+
+check("list_comments: a fourth consent, and it lists the comment") do
+  listed = structured.call(client.call_tool(tool: tool.call("list_comments"), arguments: { post_id: created["id"] }))
+  browser.consents == 4 && listed["comments"] == [ comment ]
+end
+
+check("update_comment and get_comment need no new consent") do
+  structured.call(client.call_tool(tool: tool.call("update_comment"), arguments: { id: comment["id"], body: "Edited" }))
+  structured.call(client.call_tool(tool: tool.call("get_comment"), arguments: { id: comment["id"] }))["body"] == "Edited" && browser.consents == 4
+end
+
+check("delete_comment: a fifth consent, then success") do
+  deleted = structured.call(client.call_tool(tool: tool.call("delete_comment"), arguments: { id: comment["id"] }))
+  deleted == { "id" => comment["id"], "deleted" => true } && browser.consents == 5
+end
+
+orphan = structured.call(client.call_tool(tool: tool.call("create_comment"), arguments: { post_id: created["id"], body: "Goes with the post" }))
+
+check("delete_post: a sixth consent for its own scope, then success") do
   deleted = structured.call(client.call_tool(tool: tool.call("delete_post"), arguments: { id: created["id"] }))
-  deleted == { "id" => created["id"], "deleted" => true } && browser.consents == 3
+  deleted == { "id" => created["id"], "deleted" => true } && browser.consents == 6
+end
+
+check("its comments went with it") do
+  client.call_tool(tool: tool.call("get_comment"), arguments: { id: orphan["id"] })["result"]["isError"] == true
 end
 
 check("the post is gone: a tool error, not a crash") do

@@ -102,7 +102,7 @@ class McpEndpointSecurityTest < ActionDispatch::IntegrationTest
     body = mcp_request("tools/list", token: issue_token(scopes: "posts:read"))
 
     assert_response :success
-    assert_equal %w[ create_post delete_post get_post list_posts update_post ], body.dig("result", "tools").pluck("name").sort
+    assert_equal McpEndpoint::TOOLS.map(&:tool_name).sort, body.dig("result", "tools").pluck("name").sort
   end
 
   test "the scope check holds when the HTTP gate is bypassed" do
