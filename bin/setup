@@ -15,10 +15,12 @@ FileUtils.chdir APP_ROOT do
   puts "== Installing dependencies =="
   system("bundle check") || system!("bundle install")
 
-  # puts "\n== Copying sample files =="
-  # unless File.exist?("config/database.yml")
-  #   FileUtils.cp "config/database.yml.sample", "config/database.yml"
-  # end
+  puts "\n== Loading .env =="
+  FileUtils.cp ".env.example", ".env" unless File.exist?(".env")
+  File.foreach(".env") do |line|
+    name, value = line.chomp.split("=", 2)
+    ENV[name] ||= value if value && name.match?(/\A[A-Z_]+\z/)
+  end
 
   puts "\n== Preparing database =="
   system! "bin/rails db:prepare"

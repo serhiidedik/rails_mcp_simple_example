@@ -50,7 +50,7 @@
       <pre tabindex="0"><code>npx @modelcontextprotocol/inspector@<%= DocsHelper::INSPECTOR_VERSION %> \
   --server-url <%= endpoint %> --transport http</code></pre>
       <% if Rails.env.development? %>
-        <p class="note">Sign in locally as <code>demo@example.com</code>. The password is the value of <code>SEED_USER_PASSWORD</code>, and the README has the default.</p>
+        <p class="note">Sign in with <code>SEED_USER_EMAIL</code> and <code>SEED_USER_PASSWORD</code> from your <code>.env</code> file.</p>
       <% end %>
       <p class="note">MCP has no OpenAPI-style file: a client reads the contract live from <code>tools/list</code>. This page and the contract link above are built from the same classes that answer that call, so they cannot disagree with it.</p>
     </section>

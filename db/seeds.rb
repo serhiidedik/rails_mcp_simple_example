@@ -1,13 +1,13 @@
-# Accounts are created out of band: this sample has no sign-up. Development gets one demo user, whose
-# password is printed once, and ten sample posts. In production use the console:
+# Accounts are created out of band: this sample has no sign-up. Development gets the demo user
+# configured in .env, and ten sample posts. In production use the console:
 # User.create!(email_address:, password:).
 if Rails.env.development?
-  email_address = ENV.fetch("SEED_USER_EMAIL", "demo@example.com")
+  email_address, password = ENV.values_at("SEED_USER_EMAIL", "SEED_USER_PASSWORD")
+  abort "Set SEED_USER_EMAIL and SEED_USER_PASSWORD: copy .env.example to .env and load it." if email_address.blank? || password.blank?
 
   unless User.exists?(email_address:)
-    password = ENV.fetch("SEED_USER_PASSWORD") { SecureRandom.base58(20) }
     User.create!(email_address:, password:)
-    puts "Created #{email_address} with password: #{password}"
+    puts "Created the demo user #{email_address}"
   end
 
   unless Post.any?

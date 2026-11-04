@@ -77,9 +77,9 @@ class McpApiReferenceTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "the root page shows a local account only in development" do
+  test "the root page mentions the local sign-in only in development" do
     get "/"
-    assert_not_includes response.body, "demo@example.com"
+    assert_not_includes response.body, "SEED_USER_EMAIL"
   end
 
   McpEndpoint::TOOLS.each do |tool|
