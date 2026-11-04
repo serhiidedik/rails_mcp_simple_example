@@ -23,7 +23,7 @@ class McpCommentToolsTest < ActionDispatch::IntegrationTest
 
   test "list walks every page" do
     post = posts(:one)
-    2.times { |i| post.comments.create!(body: "More #{i}") }
+    2.times { |i| post.comments.create!(user: users(:alice), body: "More #{i}") }
     seen = []
     cursor = nil
 
@@ -38,16 +38,13 @@ class McpCommentToolsTest < ActionDispatch::IntegrationTest
 
   test "a missing post or comment is a tool error that names it" do
     [
-      [ "list_comments", { post_id: 999_999 }, "Post not found" ],
-      [ "create_comment", { post_id: 999_999, body: "x" }, "Post not found" ],
-      [ "get_comment", { id: 999_999 }, "Comment not found" ],
-      [ "update_comment", { id: 999_999, body: "x" }, "Comment not found" ],
-      [ "delete_comment", { id: 999_999 }, "Comment not found" ]
+      [ "list_comments", { post_id: 999_999 }, "Post 999999 does not exist" ],
+      [ "create_comment", { post_id: 999_999, body: "x" }, "Post 999999 does not exist" ],
+      [ "get_comment", { id: 999_999 }, "Comment 999999 does not exist" ],
+      [ "update_comment", { id: 999_999, body: "x" }, "Comment 999999 does not exist" ],
+      [ "delete_comment", { id: 999_999 }, "Comment 999999 does not exist" ]
     ].each do |name, arguments, message|
-      result = call_tool(name, arguments, token: @token).fetch("result")
-
-      assert result["isError"], name
-      assert_equal message, result.dig("content", 0, "text"), name
+      assert_includes tool_error(name, arguments, token: @token)["message"], message, name
     end
   end
 

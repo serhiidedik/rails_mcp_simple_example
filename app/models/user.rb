@@ -7,6 +7,9 @@ class User < ApplicationRecord
   has_many :access_grants, class_name: "Doorkeeper::AccessGrant", foreign_key: :resource_owner_id, dependent: :delete_all, inverse_of: false
   has_many :access_tokens, class_name: "Doorkeeper::AccessToken", foreign_key: :resource_owner_id, dependent: :delete_all, inverse_of: false
 
+  has_many :posts, dependent: :destroy
+  has_many :comments, dependent: :destroy
+
   normalizes :email_address, with: ->(email) { email.strip.downcase }
 
   validates :email_address, presence: true, uniqueness: true, format: { with: URI::MailTo::EMAIL_REGEXP }

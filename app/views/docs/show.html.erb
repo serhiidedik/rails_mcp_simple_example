@@ -36,6 +36,7 @@
         </ul>
       </li>
       <li><a href="#scopes">Scopes</a></li>
+      <li><a href="#ownership">Who owns what</a></li>
       <li><a href="#errors">Errors</a></li>
       <li><a href="#http">Raw HTTP</a></li>
     </ul>
@@ -120,9 +121,19 @@
       </div>
     </section>
 
+    <section id="ownership">
+      <h2>Who owns what</h2>
+      <p>Whoever approves a client is the user it acts for. The server reads that user from the token, never from tool arguments, so a client cannot claim to be someone else.</p>
+      <ul>
+        <li>Every signed-in user can read every post and comment, and add comments to any post. <code>mine</code> says which records are yours, and <code>list_posts</code> takes <code>mine: true</code> to show only those.</li>
+        <li>Only the owner can update or delete a record. Deleting a post also deletes the comments of other users on it.</li>
+        <li>Scopes say what a client may do. Ownership says to which records.</li>
+      </ul>
+    </section>
+
     <section id="errors">
       <h2>Errors</h2>
-      <p>Refusals are HTTP errors. A tool that ran but could not do its job answers <code>200</code> with <code>isError</code>, so that the model can read why and try again.</p>
+      <p>Refusals are HTTP errors. A tool that ran but could not do its job answers <code>200</code> with <code>isError</code>, so that the model can read why and decide what to do next.</p>
       <div class="table" tabindex="0" role="region" aria-label="All errors">
         <table>
           <thead><tr><th>Response</th><th>When</th><th>What the client does</th></tr></thead>
@@ -138,10 +149,15 @@
             <tr><td><code>400</code> <code>-32700</code></td><td class="wrap">The body is not valid JSON.</td><td class="wrap">Fixes the request.</td></tr>
             <tr><td><code>200</code> <code>-32602</code></td><td class="wrap">No tool has that name.</td><td class="wrap">Lists the tools again.</td></tr>
             <tr><td><code>200</code> <code>-32603</code></td><td class="wrap">The server failed unexpectedly. The message holds no details, and the failure is reported on the server.</td><td class="wrap">Retries later.</td></tr>
-            <tr><td><code>200</code> <code>isError</code></td><td class="wrap">Arguments are missing or invalid, the record does not exist, or validation failed. The text says why.</td><td class="wrap">Reads the text and corrects the call.</td></tr>
+            <tr><td><code>200</code> <code>isError</code></td><td class="wrap">Arguments do not match the input schema. The text says which.</td><td class="wrap">Corrects the call.</td></tr>
+            <tr><td><code>200</code> <code>isError</code> <code>not_found</code></td><td class="wrap">The record does not exist. Someone may have deleted it since the client read it.</td><td class="wrap">Stops using this id, and lists what exists now or tells the person.</td></tr>
+            <tr><td><code>200</code> <code>isError</code> <code>not_owner</code></td><td class="wrap">The record belongs to another user.</td><td class="wrap">Does not retry, and tells the person.</td></tr>
+            <tr><td><code>200</code> <code>isError</code> <code>validation_failed</code></td><td class="wrap">Values were refused. <code>fields</code> lists them.</td><td class="wrap">Corrects them and calls again.</td></tr>
           </tbody>
         </table>
       </div>
+      <p>The last three carry a code, a message and the next step as JSON in the text of the result. Here, a model comments on a post that its owner has just deleted:</p>
+      <pre tabindex="0"><code><%= JSON.pretty_generate(error: { code: "not_found", message: "Post 5 does not exist. It may have been deleted since you last read it.", next_step: "Do not retry with this id. Call list_posts to see what exists now, or tell the user it is gone." }) %></code></pre>
     </section>
 
     <section id="http">

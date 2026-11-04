@@ -3,10 +3,14 @@
     {
       "name": "list_posts",
       "title": "List posts",
-      "description": "Lists posts, newest first. Pass next_cursor back as cursor to get the following page.",
+      "description": "Lists posts of every user, newest first. Pass mine to see only your own. Pass next_cursor back as cursor to get the following page.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
+          "mine": {
+            "type": "boolean",
+            "description": "True returns only your own posts."
+          },
           "cursor": {
             "type": "string",
             "description": "The next_cursor of the previous page. Omit it for the first page."
@@ -32,6 +36,14 @@
                 "id": {
                   "type": "integer"
                 },
+                "user_id": {
+                  "type": "integer",
+                  "description": "The owner."
+                },
+                "mine": {
+                  "type": "boolean",
+                  "description": "True when you own this, and so can change it."
+                },
                 "title": {
                   "type": "string"
                 },
@@ -55,6 +67,8 @@
               },
               "required": [
                 "id",
+                "user_id",
+                "mine",
                 "title",
                 "body",
                 "published",
@@ -111,6 +125,14 @@
           "id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": "integer",
+            "description": "The owner."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "True when you own this, and so can change it."
+          },
           "title": {
             "type": "string"
           },
@@ -134,6 +156,8 @@
         },
         "required": [
           "id",
+          "user_id",
+          "mine",
           "title",
           "body",
           "published",
@@ -183,6 +207,14 @@
           "id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": "integer",
+            "description": "The owner."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "True when you own this, and so can change it."
+          },
           "title": {
             "type": "string"
           },
@@ -206,6 +238,8 @@
         },
         "required": [
           "id",
+          "user_id",
+          "mine",
           "title",
           "body",
           "published",
@@ -224,7 +258,7 @@
     {
       "name": "update_post",
       "title": "Update post",
-      "description": "Changes the given fields of a post and leaves the others as they are.",
+      "description": "Changes the given fields of a post and leaves the others as they are. Only its owner can do this.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -261,6 +295,14 @@
           "id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": "integer",
+            "description": "The owner."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "True when you own this, and so can change it."
+          },
           "title": {
             "type": "string"
           },
@@ -284,6 +326,8 @@
         },
         "required": [
           "id",
+          "user_id",
+          "mine",
           "title",
           "body",
           "published",
@@ -302,7 +346,7 @@
     {
       "name": "delete_post",
       "title": "Delete post",
-      "description": "Permanently deletes a post and its comments. This cannot be undone.",
+      "description": "Permanently deletes a post and its comments, including those of other users. Only its owner can do this. It cannot be undone.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -383,6 +427,14 @@
                 "post_id": {
                   "type": "integer"
                 },
+                "user_id": {
+                  "type": "integer",
+                  "description": "The owner."
+                },
+                "mine": {
+                  "type": "boolean",
+                  "description": "True when you own this, and so can change it."
+                },
                 "body": {
                   "type": "string"
                 },
@@ -398,6 +450,8 @@
               "required": [
                 "id",
                 "post_id",
+                "user_id",
+                "mine",
                 "body",
                 "created_at",
                 "updated_at"
@@ -455,6 +509,14 @@
           "post_id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": "integer",
+            "description": "The owner."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "True when you own this, and so can change it."
+          },
           "body": {
             "type": "string"
           },
@@ -470,6 +532,8 @@
         "required": [
           "id",
           "post_id",
+          "user_id",
+          "mine",
           "body",
           "created_at",
           "updated_at"
@@ -486,7 +550,7 @@
     {
       "name": "create_comment",
       "title": "Create comment",
-      "description": "Adds a comment to a post.",
+      "description": "Adds a comment to any post. You own the comment.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -517,6 +581,14 @@
           "post_id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": "integer",
+            "description": "The owner."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "True when you own this, and so can change it."
+          },
           "body": {
             "type": "string"
           },
@@ -532,6 +604,8 @@
         "required": [
           "id",
           "post_id",
+          "user_id",
+          "mine",
           "body",
           "created_at",
           "updated_at"
@@ -548,7 +622,7 @@
     {
       "name": "update_comment",
       "title": "Update comment",
-      "description": "Replaces the body of a comment. A comment stays on its post.",
+      "description": "Replaces the body of a comment. A comment stays on its post. Only its owner can do this.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -579,6 +653,14 @@
           "post_id": {
             "type": "integer"
           },
+          "user_id": {
+            "type": "integer",
+            "description": "The owner."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "True when you own this, and so can change it."
+          },
           "body": {
             "type": "string"
           },
@@ -594,6 +676,8 @@
         "required": [
           "id",
           "post_id",
+          "user_id",
+          "mine",
           "body",
           "created_at",
           "updated_at"
@@ -610,7 +694,7 @@
     {
       "name": "delete_comment",
       "title": "Delete comment",
-      "description": "Permanently deletes a comment. This cannot be undone.",
+      "description": "Permanently deletes a comment. Only its owner can do this. It cannot be undone.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {

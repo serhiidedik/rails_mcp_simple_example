@@ -24,9 +24,9 @@ module Comments
     )
     example arguments: { post_id: 1, limit: 1 }, result: { comments: [ ToolPayload::EXAMPLE.merge(id: 2) ], next_cursor: "Mg" }
 
-    def self.perform(**arguments)
+    def self.perform(actor:, **arguments)
       respond_with(List.run(arguments)) do |page|
-        { comments: page.records.map { |comment| ToolPayload.comment(comment) }, next_cursor: page.next_cursor }
+        { comments: page.records.map { |comment| ToolPayload.comment(comment, actor) }, next_cursor: page.next_cursor }
       end
     end
   end

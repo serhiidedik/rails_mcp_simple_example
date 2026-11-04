@@ -17,8 +17,8 @@ module Posts
     output_schema(ToolPayload::POST)
     example arguments: { title: "Hello", body: "The first post" }, result: ToolPayload::EXAMPLE
 
-    def self.perform(**arguments)
-      respond_with(Create.run(arguments)) { |post| ToolPayload.post(post) }
+    def self.perform(actor:, **arguments)
+      respond_with(Create.run(arguments.merge(user_id: actor.user_id))) { |post| ToolPayload.post(post, actor) }
     end
   end
 end

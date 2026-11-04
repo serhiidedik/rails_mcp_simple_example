@@ -234,6 +234,33 @@ check("the post is gone: a tool error, not a crash") do
   client.call_tool(tool: tool.call("get_post"), arguments: { id: created["id"] })["result"]["isError"] == true
 end
 
+error_of = ->(response) { JSON.parse(response["result"]["content"].first["text"]).fetch("error") }
+
+check("a comment on a deleted post is not_found, and says what to do next") do
+  error = error_of.call(client.call_tool(tool: tool.call("create_comment"), arguments: { post_id: created["id"], body: "Too late" }))
+  error["code"] == "not_found" && error["next_step"].include?("list_posts")
+end
+
+everything = structured.call(client.call_tool(tool: tool.call("list_posts"), arguments: { limit: 100 }))["posts"]
+
+theirs = check("the seeded posts belong to two users, and mine tells them apart") do
+  everything.any? { |post| post["mine"] } && everything.find { |post| !post["mine"] }
+end
+
+check("mine: true returns only my posts") do
+  structured.call(client.call_tool(tool: tool.call("list_posts"), arguments: { mine: true, limit: 100 }))["posts"].all? { |post| post["mine"] }
+end
+
+check("changing a post of another user is not_owner, and changes nothing") do
+  error = error_of.call(client.call_tool(tool: tool.call("update_post"), arguments: { id: theirs["id"], title: "Taken over" }))
+  error["code"] == "not_owner" && structured.call(client.call_tool(tool: tool.call("get_post"), arguments: { id: theirs["id"] }))["title"] == theirs["title"]
+end
+
+check("anyone can comment on a post of another user, and owns the comment") do
+  added = structured.call(client.call_tool(tool: tool.call("create_comment"), arguments: { post_id: theirs["id"], body: "Hello" }))
+  added["mine"] == true
+end
+
 check("one consent covered all ten tools") { browser.consents == 1 }
 
 puts "\nAll checks passed."

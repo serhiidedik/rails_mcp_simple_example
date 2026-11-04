@@ -61,6 +61,13 @@ class McpApiReferenceTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "the root page explains who can change what" do
+    get "/"
+
+    assert_select "section#ownership h2", "Who owns what"
+    assert_select "section#list_posts td code", "mine"
+  end
+
   test "the root page runs no script and loads nothing from anywhere" do
     get "/"
 

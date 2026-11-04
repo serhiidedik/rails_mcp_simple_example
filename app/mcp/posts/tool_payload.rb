@@ -6,18 +6,22 @@ module Posts
       type: "object",
       properties: {
         id: { type: "integer" },
+        user_id: { type: "integer", description: "The owner." },
+        mine: { type: "boolean", description: "True when you own this, and so can change it." },
         title: { type: "string" },
         body: { type: [ "string", "null" ] },
         published: { type: "boolean" },
         created_at: { type: "string", format: "date-time" },
         updated_at: { type: "string", format: "date-time" }
       },
-      required: %w[ id title body published created_at updated_at ],
+      required: %w[ id user_id mine title body published created_at updated_at ],
       additionalProperties: false
     }.freeze
 
     EXAMPLE = {
       id: 1,
+      user_id: 1,
+      mine: true,
       title: "Hello",
       body: "The first post",
       published: false,
@@ -27,9 +31,11 @@ module Posts
 
     module_function
 
-    def post(post)
+    def post(post, actor)
       {
         id: post.id,
+        user_id: post.user_id,
+        mine: actor.owns?(post),
         title: post.title,
         body: post.body,
         published: post.published?,

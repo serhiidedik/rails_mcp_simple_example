@@ -13,8 +13,8 @@ module Comments
     output_schema(ToolPayload::COMMENT)
     example arguments: { id: 1 }, result: ToolPayload::EXAMPLE
 
-    def self.perform(id:)
-      respond_with(Find.run(id:)) { |comment| ToolPayload.comment(comment) }
+    def self.perform(actor:, id:)
+      respond_with(Find.run(id:)) { |comment| ToolPayload.comment(comment, actor) }
     end
   end
 end

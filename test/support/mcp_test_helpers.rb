@@ -41,6 +41,14 @@ module McpTestHelpers
     result.dig("result", "structuredContent")
   end
 
+  # The error of a failed tool call: code, message, next_step, and sometimes fields.
+  def tool_error(name, arguments = {}, token:)
+    result = call_tool(name, arguments, token:)
+    assert_response :success
+    assert result.dig("result", "isError"), result.inspect
+    JSON.parse(result.dig("result", "content", 0, "text")).fetch("error")
+  end
+
   def www_authenticate
     response.headers["WWW-Authenticate"]
   end

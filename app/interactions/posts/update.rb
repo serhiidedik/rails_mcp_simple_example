@@ -1,6 +1,8 @@
 module Posts
   # Partial update: only the attributes the caller actually passed are changed.
   class Update < ApplicationInteraction
+    include OwnerOnly
+
     ATTRIBUTES = %i[ title body published ].freeze
 
     integer :id
@@ -10,7 +12,7 @@ module Posts
 
     def execute
       post = Post.find(id)
-      errors.merge!(post.errors) unless post.update(given_attributes)
+      change(post) { errors.merge!(post.errors) unless post.update(given_attributes) }
       post
     end
 

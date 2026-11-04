@@ -13,8 +13,8 @@ module Posts
     output_schema(ToolPayload::POST)
     example arguments: { id: 1 }, result: ToolPayload::EXAMPLE
 
-    def self.perform(id:)
-      respond_with(Find.run(id:)) { |post| ToolPayload.post(post) }
+    def self.perform(actor:, id:)
+      respond_with(Find.run(id:)) { |post| ToolPayload.post(post, actor) }
     end
   end
 end

@@ -1,11 +1,14 @@
 one:
   post: one
+  user: alice
   body: First comment
 
 two:
   post: one
+  user: bob
   body: Second comment
 
 other:
   post: two
+  user: bob
   body: A comment on another post
