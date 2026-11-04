@@ -2,7 +2,7 @@ module Posts
   class DeleteTool < ApplicationTool
     tool_name "delete_post"
     title "Delete post"
-    description "Permanently deletes a post and its comments. This cannot be undone."
+    description "Permanently deletes a post and its comments, including those of other users. Only its owner can do this. It cannot be undone."
     required_scope "posts:delete"
     annotations(read_only_hint: false, destructive_hint: true, idempotent_hint: true, open_world_hint: false)
     input_schema(
@@ -17,8 +17,8 @@ module Posts
     )
     example arguments: { id: 1 }, result: { id: 1, deleted: true }
 
-    def self.perform(id:)
-      respond_with(Destroy.run(id:)) { |post| { id: post.id, deleted: post.destroyed? } }
+    def self.perform(actor:, id:)
+      respond_with(Destroy.run(id:, actor:)) { |post| { id: post.id, deleted: post.destroyed? } }
     end
   end
 end

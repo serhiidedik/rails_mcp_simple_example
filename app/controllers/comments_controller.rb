@@ -15,24 +15,31 @@ class CommentsController < ApplicationController
 
   # POST /posts/1/comments
   def create
-    comment = Comments::Create.run!(comment_params.merge(post_id: params[:post_id]))
+    comment = Comments::Create.run!(comment_params.merge(owner_param, post_id: params[:post_id]))
 
     render json: comment, status: :created, location: comment
   end
 
   # PATCH/PUT /comments/1
   def update
-    render json: Comments::Update.run!(comment_params.merge(id: params[:id]))
+    render json: Comments::Update.run!(comment_params.merge(id: params[:id], actor: Actor.unrestricted))
   end
 
   # DELETE /comments/1
   def destroy
-    Comments::Destroy.run!(id: params[:id])
+    Comments::Destroy.run!(id: params[:id], actor: Actor.unrestricted)
   end
 
   private
     # The post comes from the URL, never from the body.
     def comment_params
       params.expect(comment: [ :body ]).to_h
+    end
+
+    # REST has no sign-in in this sample, so the request names the owner of a new comment.
+    def owner_param
+      params.expect(comment: [ :user_id ]).to_h
+    rescue ActionController::ParameterMissing
+      {}
     end
 end

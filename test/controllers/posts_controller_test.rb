@@ -12,7 +12,7 @@ class PostsControllerTest < ActionDispatch::IntegrationTest
 
   test "should create post" do
     assert_difference("Post.count") do
-      post posts_url, params: { post: { body: @post.body, published: @post.published, title: @post.title } }, as: :json
+      post posts_url, params: { post: { body: @post.body, published: @post.published, title: @post.title, user_id: users(:alice).id } }, as: :json
     end
 
     assert_response :created
@@ -24,7 +24,7 @@ class PostsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should update post" do
-    patch post_url(@post), params: { post: { body: @post.body, published: @post.published, title: @post.title } }, as: :json
+    patch post_url(@post), params: { post: { body: @post.body, published: @post.published, title: @post.title, user_id: users(:alice).id } }, as: :json
     assert_response :success
   end
 
@@ -38,7 +38,7 @@ class PostsControllerTest < ActionDispatch::IntegrationTest
 
   test "index paginates and links to the next page" do
     Post.destroy_all
-    created = Array.new(3) { |i| Post.create!(title: "Post #{i}") }
+    created = Array.new(3) { |i| Post.create!(user: users(:alice), title: "Post #{i}") }
 
     get posts_url(limit: 2), as: :json
     assert_response :success

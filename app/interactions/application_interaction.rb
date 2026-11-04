@@ -4,6 +4,7 @@
 #
 # Failure contract, relied on by every adapter:
 # - an expected failure (invalid input, failed validation) is reported through #errors;
-# - a missing record raises ActiveRecord::RecordNotFound from #execute.
+# - a missing record raises ActiveRecord::RecordNotFound from #execute;
+# - a change by someone who is not the owner raises OwnerOnly::NotOwner from #execute.
 class ApplicationInteraction < ActiveInteraction::Base
 end

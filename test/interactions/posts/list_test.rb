@@ -4,7 +4,7 @@ class Posts::ListTest < ActiveSupport::TestCase
   setup { Post.destroy_all }
 
   test "returns the newest posts first and walks every page through the cursor" do
-    created = Array.new(5) { |i| Post.create!(title: "Post #{i}") }
+    created = Array.new(5) { |i| Post.create!(user: users(:alice), title: "Post #{i}") }
 
     first = Posts::List.run!(limit: 2)
     assert_equal created.last(2).reverse, first.records
@@ -19,7 +19,7 @@ class Posts::ListTest < ActiveSupport::TestCase
   end
 
   test "runs a single query however many rows the page holds" do
-    3.times { |i| Post.create!(title: "Post #{i}") }
+    3.times { |i| Post.create!(user: users(:alice), title: "Post #{i}") }
 
     assert_queries_count(1) { Posts::List.run!(limit: 2) }
   end

@@ -64,7 +64,8 @@ curl http://localhost:3000/mcp \
 ```
 
 **4. Connect a real client and sign in.** A browser opens, where you sign in with `SEED_USER_EMAIL` and
-`SEED_USER_PASSWORD` from `.env` and approve the access. Add this URL to your client as an HTTP MCP server:
+`SEED_USER_PASSWORD` from `.env` and approve the access. `SEED_OTHER_USER_EMAIL` is a second user, who owns
+the other half of the sample posts. Add this URL to your client as an HTTP MCP server:
 
 ```text
 http://localhost:3000/mcp
@@ -213,6 +214,46 @@ less or connected before a new tool was added, gets an HTTP 403 naming the scope
 | `config/initializers/rack_attack.rb` | Every rate limit |
 | `config/mcp.yml` | Public URL, server identity, allowed origins |
 
+## Who owns what
+
+Whoever approves a client is the user it acts for. The server reads that user from the token, never from
+tool arguments, so a client cannot claim to be someone else. Scopes say what a client may do, and ownership
+says to which records.
+
+- Every signed-in user can read every post and comment, and add comments to any post. `mine` says which
+  records are yours, and `list_posts` takes `mine: true` to show only those.
+- Only the owner can update or delete a record. A post owner can delete their post with the comments of
+  others on it, but cannot edit or delete those comments on their own.
+- REST has no sign-in in this sample, so it is not limited to the owner, and a new record names its
+  `user_id` in the request.
+
+## When a tool fails
+
+Other people work at the same time, so whatever a model has read can be out of date by its next call. A
+failed tool answers with `isError` and JSON the model can act on:
+
+```json
+{ "error": {
+  "code": "not_found",
+  "message": "Post 5 does not exist. It may have been deleted since you last read it.",
+  "next_step": "Do not retry with this id. Call list_posts to see what exists now, or tell the user it is gone."
+} }
+```
+
+| Code | Means | The model should |
+|---|---|---|
+| `not_found` | The record is gone, or never existed | Stop using the id, then list again or tell the person |
+| `not_owner` | The record belongs to another user | Not retry, and tell the person |
+| `validation_failed` | Values were refused, listed in `fields` | Correct them and call again |
+
+The server's instructions tell clients to follow `next_step`. `ApplicationTool` builds these answers, so a
+new entity gets them without extra code. Row locks and the foreign key cover the moment when two people act
+at once: a comment racing the deletion of its post, or an edit racing the deletion of its record, also ends
+in `not_found`, not in a server error or a false success.
+
+**Try it.** Connect two clients, one signed in as each user. As the other user, delete a post. Then ask the
+first client to comment on it, and watch it read the error and recover.
+
 ## Add a new entity to MCP
 
 A model is not reachable through MCP until you add its tools to an allowlist, so nothing is exposed by
@@ -222,13 +263,13 @@ accident. Comments were added exactly this way, so the files below are real and 
 
 - **Scopes:** one each for read, write and delete, like `comments:read`, `comments:write` and
   `comments:delete`. People approve them all on one consent page.
-- **Ownership:** scopes say what a client may do, not to which records. If a person should only touch
-  their own records, add that now: the user id is `server_context.auth_info.subject`.
+- **Ownership:** who owns a record, and who may change it. Comments give every user read access and limit
+  changes to the owner. Add a `user` reference, as below, and set it from the token.
 
 **2. Create the model and its relation.** Use `scaffold` for REST endpoints too, or `model` for MCP only.
 
 ```sh
-bin/rails generate scaffold Comment post:references body:text
+bin/rails generate scaffold Comment post:references user:references body:text
 ```
 
 In the migration, make required columns `null: false`. Then set the relation on both sides:
@@ -239,11 +280,12 @@ class Comment < ApplicationRecord
   BODY_MAX_LENGTH = 10_000
 
   belongs_to :post
+  belongs_to :user
 
   validates :body, presence: true, length: { maximum: BODY_MAX_LENGTH }
 end
 
-# app/models/post.rb
+# app/models/post.rb and app/models/user.rb
 has_many :comments, dependent: :destroy
 ```
 
@@ -251,17 +293,20 @@ For nested REST routes, and a thin controller, see `config/routes.rb` and `app/c
 
 **3. Write one interaction per operation** in `app/interactions/comments/`. All the logic lives here, and
 both REST and MCP call it. An expected failure goes into `errors`, and a missing record raises
-`RecordNotFound`, which the tool and the controller both turn into the right answer.
+`RecordNotFound`, which the tool and the controller both turn into the right answer. For an operation only
+the owner may do, `include OwnerOnly` and write inside `change(record) { ... }`: see
+`app/interactions/comments/update.rb`. It adds a required `actor`, checks it, and locks the row.
 
 ```ruby
 # app/interactions/comments/create.rb
 module Comments
   class Create < ApplicationInteraction
     integer :post_id
+    integer :user_id, default: nil
     string :body, default: nil, strip: false
 
     def execute
-      comment = Post.find(post_id).comments.new(body:)
+      comment = Post.find(post_id).comments.new(user_id:, body:)
       errors.merge!(comment.errors) unless comment.save
       comment
     end
@@ -272,10 +317,11 @@ end
 For a list, `include KeysetPagination` and return `paginate(scope)`: see `app/interactions/comments/list.rb`.
 
 **4. Describe what the tools return**, once, in `app/mcp/comments/tool_payload.rb`: an output schema, a
-serializer that matches it, and an example.
+serializer that matches it, and an example. Include `user_id` and `mine`.
 
 **5. Write one thin tool per operation** in `app/mcp/comments/`. It declares its contract and calls the
-interaction. The base class handles the scope check, errors and the audit log.
+interaction. The base class handles the scope check, errors and the audit log, and passes in `actor`, the
+user from the token. Never put an owner in `input_schema`.
 
 ```ruby
 # app/mcp/comments/create_tool.rb
@@ -297,8 +343,8 @@ module Comments
     output_schema(ToolPayload::COMMENT)
     example arguments: { post_id: 1, body: "Nice post" }, result: ToolPayload::EXAMPLE
 
-    def self.perform(**arguments)
-      respond_with(Create.run(arguments)) { |comment| ToolPayload.comment(comment) }
+    def self.perform(actor:, **arguments)
+      respond_with(Create.run(arguments.merge(user_id: actor.user_id))) { |comment| ToolPayload.comment(comment, actor) }
     end
   end
 end
@@ -323,7 +369,8 @@ bin/rails mcp:docs
 
 **9. Add tests.** Add a fixture named `one` to `test/fixtures/comments.yml`, and the shared tests will call
 your documented examples against it. Copy `test/integration/mcp_comment_tools_test.rb` for the rest:
-the lifecycle, missing records, validation errors and each scope.
+the lifecycle, missing records, validation errors and each scope. `mcp_ownership_test.rb` shows the
+ownership rules, and `mcp_tool_errors_test.rb` a record deleted by someone else.
 
 **10. Add seeds, then try it.** Add sample records to `db/seeds.rb`. Restart to load the new folders and
 initializer, and to run the migration and seeds, then open `/`:
@@ -382,9 +429,8 @@ No tool changes.
 
 1. **Protect or remove the REST API.** `/posts` and `/comments` have no authentication, as generated by the scaffold.
    Anyone can read and change what MCP protects with OAuth.
-2. **Decide who may touch which record.** Scopes say what a client may do, and any signed-in person
-   can approve any scope for all records. Posts and comments have no owner in this sample. For per-record rules, pass
-   the user into the interactions (`auth_info.subject` holds the user id).
+2. **Check the ownership rules fit.** Here anyone signed in can read everything, and only owners can change
+   it. If some records are private, limit what `Find` and `List` return for the actor as well.
 3. Set `MCP_PUBLIC_URL` (see `.env.example`). The app refuses to boot without an https URL.
 4. Create the accounts, since there is no sign-up: `User.create!(email_address:, password:)`.
 5. Decide whether the reference at `/` stays public. It holds no data, but it does show your tools

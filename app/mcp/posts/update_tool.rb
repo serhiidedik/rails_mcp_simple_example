@@ -2,7 +2,7 @@ module Posts
   class UpdateTool < ApplicationTool
     tool_name "update_post"
     title "Update post"
-    description "Changes the given fields of a post and leaves the others as they are."
+    description "Changes the given fields of a post and leaves the others as they are. Only its owner can do this."
     required_scope "posts:write"
     # Destructive: it overwrites existing content.
     annotations(read_only_hint: false, destructive_hint: true, idempotent_hint: true, open_world_hint: false)
@@ -20,8 +20,8 @@ module Posts
     example arguments: { id: 1, published: true },
             result: ToolPayload::EXAMPLE.merge(published: true, updated_at: "2026-11-04T10:05:00Z")
 
-    def self.perform(**arguments)
-      respond_with(Update.run(arguments)) { |post| ToolPayload.post(post) }
+    def self.perform(actor:, **arguments)
+      respond_with(Update.run(arguments.merge(actor:))) { |post| ToolPayload.post(post, actor) }
     end
   end
 end

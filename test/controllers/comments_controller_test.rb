@@ -23,7 +23,7 @@ class CommentsControllerTest < ActionDispatch::IntegrationTest
 
   test "create adds a comment to the post in the URL, not one named in the body" do
     assert_difference("@post.comments.count") do
-      post post_comments_url(@post), params: { comment: { body: "New", post_id: posts(:two).id } }, as: :json
+      post post_comments_url(@post), params: { comment: { body: "New", post_id: posts(:two).id, user_id: users(:alice).id } }, as: :json
     end
 
     assert_response :created
@@ -32,7 +32,7 @@ class CommentsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "create reports validation errors" do
-    post post_comments_url(@post), params: { comment: { body: " " } }, as: :json
+    post post_comments_url(@post), params: { comment: { body: " ", user_id: users(:alice).id } }, as: :json
 
     assert_response :unprocessable_content
     assert response.parsed_body["body"].present?
@@ -42,7 +42,7 @@ class CommentsControllerTest < ActionDispatch::IntegrationTest
     get post_comments_url(post_id: 0), as: :json
     assert_response :not_found
 
-    post post_comments_url(post_id: 0), params: { comment: { body: "New" } }, as: :json
+    post post_comments_url(post_id: 0), params: { comment: { body: "New", user_id: users(:alice).id } }, as: :json
     assert_response :not_found
   end
 
@@ -52,6 +52,20 @@ class CommentsControllerTest < ActionDispatch::IntegrationTest
 
     get "/comments/abc", as: :json
     assert_response :not_found
+  end
+
+  test "create needs an owner, since REST has no sign-in" do
+    post post_comments_url(@post), params: { comment: { body: "New" } }, as: :json
+
+    assert_response :unprocessable_content
+    assert_includes response.parsed_body.values.flatten, "User must exist"
+  end
+
+  test "REST has no sign-in, so it is not limited to the owner" do
+    patch comment_url(comments(:two)), params: { comment: { body: "Edited" } }, as: :json
+
+    assert_response :success
+    assert_equal users(:bob), comments(:two).reload.user
   end
 
   test "show" do

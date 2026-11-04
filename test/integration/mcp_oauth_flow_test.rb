@@ -35,7 +35,7 @@ class McpOauthFlowTest < ActionDispatch::IntegrationTest
     comment = tool_result("create_comment", { post_id: created["id"], body: "Hi" }, token:)
     assert tool_result("list_comments", { post_id: created["id"] }, token:)
     assert tool_result("delete_comment", { id: comment["id"] }, token:)
-    assert tool_result("delete_post", { id: posts(:two).id }, token:)
+    assert tool_result("delete_post", { id: tool_result("create_post", { title: "Short lived" }, token:)["id"] }, token:)
 
     # A refreshed token keeps working.
     refresh(client, tokens["refresh_token"], resource:)

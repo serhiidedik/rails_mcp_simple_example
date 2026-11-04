@@ -111,7 +111,7 @@ class McpToolsTest < ActionDispatch::IntegrationTest
 
   test "list walks every page" do
     Post.destroy_all
-    ids = Array.new(3) { |i| Post.create!(title: "Post #{i}").id }
+    ids = Array.new(3) { |i| Post.create!(user: users(:alice), title: "Post #{i}").id }
 
     first = tool_result("list_posts", { limit: 2 }, token: @token)
     assert_equal ids.last(2).reverse, first["posts"].pluck("id")
@@ -123,7 +123,7 @@ class McpToolsTest < ActionDispatch::IntegrationTest
   end
 
   test "list renders a post with a null body and null published" do
-    post = Post.create!(title: "Sparse", published: nil)
+    post = Post.create!(user: users(:alice), title: "Sparse", published: nil)
 
     page = tool_result("list_posts", { limit: 1 }, token: @token)
 
@@ -144,7 +144,7 @@ class McpToolsTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_equal true, body.dig("result", "isError"), name
-      assert_equal "Post not found", body.dig("result", "content", 0, "text"), name
+      assert_includes body.dig("result", "content", 0, "text"), "Post 999999 does not exist", name
     end
   end
 

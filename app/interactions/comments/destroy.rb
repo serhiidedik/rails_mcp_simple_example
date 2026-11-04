@@ -1,9 +1,11 @@
 module Comments
   class Destroy < ApplicationInteraction
+    include OwnerOnly
+
     integer :id
 
     def execute
-      Comment.find(id).destroy!
+      change(Comment.find(id), &:destroy!)
     end
   end
 end
