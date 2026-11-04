@@ -1,0 +1,28 @@
+<section id="<%= tool.tool_name %>" class="tool">
+  <h3><code><%= tool.tool_name %></code></h3>
+  <p class="tool-meta">
+    <span class="<%= scope_class(tool.required_scope) %>"><%= tool.required_scope %></span>
+    <span><%= reference.behavior(tool) %></span>
+  </p>
+  <p><%= tool.description %></p>
+
+  <h4>Arguments</h4>
+  <% arguments = reference.arguments_of(tool) %>
+  <%= render "fields", fields: arguments, label: "Arguments of #{tool.tool_name}" %>
+
+  <details>
+    <summary>Returned fields</summary>
+    <%= render "fields", fields: reference.result_of(tool), label: "Fields returned by #{tool.tool_name}" %>
+  </details>
+
+  <div class="example">
+    <div>
+      <h4>Example arguments</h4>
+      <pre tabindex="0"><code><%= JSON.pretty_generate(tool.example.fetch(:arguments)) %></code></pre>
+    </div>
+    <div>
+      <h4>Example <code>structuredContent</code></h4>
+      <pre tabindex="0"><code><%= JSON.pretty_generate(tool.example.fetch(:result)) %></code></pre>
+    </div>
+  </div>
+</section>

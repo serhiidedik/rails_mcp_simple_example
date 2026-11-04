@@ -16,6 +16,15 @@ module Posts
       additionalProperties: false
     }.freeze
 
+    EXAMPLE = {
+      id: 1,
+      title: "Hello",
+      body: "The first post",
+      published: false,
+      created_at: "2026-11-04T10:00:00Z",
+      updated_at: "2026-11-04T10:00:00Z"
+    }.freeze
+
     module_function
 
     def post(post)

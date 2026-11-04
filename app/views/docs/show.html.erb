@@ -1,0 +1,180 @@
+<% settings = @reference.settings %>
+<% endpoint = @reference.endpoint_url %>
+<% metadata_path = "/.well-known/oauth-protected-resource#{settings.endpoint_path}" %>
+<% max_mib = McpEndpoint::MAX_REQUEST_BYTES / 1.megabyte %>
+
+<header class="masthead">
+  <div class="wide">
+    <p class="server"><%= settings.server_title %>, version <%= settings.server_version %></p>
+    <h1>POST <%= endpoint %></h1>
+    <p class="lede">This server lets AI clients read and change posts through the Model Context Protocol. Every request is one self-contained HTTP call with an OAuth token.</p>
+    <dl class="facts">
+      <dt>Transport</dt>
+      <dd>Streamable HTTP, stateless: one JSON response per request, with no sessions or streams</dd>
+      <dt>Protocol</dt>
+      <dd><%= @reference.protocol_versions.join(", ") %></dd>
+      <dt>Sign-in</dt>
+      <dd>OAuth 2.1 with PKCE. Discovery starts at <a href="<%= metadata_path %>"><code><%= metadata_path %></code></a></dd>
+      <dt>Contract</dt>
+      <dd><a href="<%= docs_tools_path %>"><code><%= docs_tools_path %></code></a>, the exact <code>tools/list</code> result</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wide page">
+  <nav aria-label="On this page">
+    <ul>
+      <li><a href="#connect">Connect a client</a></li>
+      <li><a href="#call">How a call travels</a></li>
+      <li><a href="#token">How a client gets a token</a></li>
+      <li>
+        <a href="#tools">Tools</a>
+        <ul>
+          <% @reference.tools.each do |tool| %>
+            <li><a href="#<%= tool.tool_name %>"><%= tool.tool_name %></a></li>
+          <% end %>
+        </ul>
+      </li>
+      <li><a href="#scopes">Scopes</a></li>
+      <li><a href="#errors">Errors</a></li>
+      <li><a href="#http">Raw HTTP</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <section id="connect">
+      <h2>Connect a client</h2>
+      <p>Give any MCP client the URL. It finds the sign-in server by itself and opens a browser for you to approve it.</p>
+      <pre tabindex="0"><code><%= endpoint %></code></pre>
+      <p>To browse the tools and call them by hand, use the <a href="https://modelcontextprotocol.io/docs/tools/inspector">MCP Inspector</a>. It is to MCP what Swagger UI is to REST, and needs Node 22.19 or newer.</p>
+      <pre tabindex="0"><code>npx @modelcontextprotocol/inspector@<%= DocsHelper::INSPECTOR_VERSION %> \
+  --server-url <%= endpoint %> --transport http</code></pre>
+      <% if Rails.env.development? %>
+        <p class="note">Sign in locally as <code>demo@example.com</code>. The password is the value of <code>SEED_USER_PASSWORD</code>, and the README has the default.</p>
+      <% end %>
+      <p class="note">MCP has no OpenAPI-style file: a client reads the contract live from <code>tools/list</code>. This page and the contract link above are built from the same classes that answer that call, so they cannot disagree with it.</p>
+    </section>
+
+    <section id="call">
+      <h2>How a call travels</h2>
+      <p>One <code>get_post</code> call, from the client to the database and back. The circles are checks. Coral text says how each check refuses a request, and the <a href="#errors">errors table</a> says what a client does about it.</p>
+      <%= render "sequence", sequence: DocsHelper::TOOL_CALL %>
+      <dl class="key">
+        <dt>Rails</dt><dd><code>config/environments/production.rb</code>, <code>config/initializers/rack_attack.rb</code></dd>
+        <dt>Transport</dt><dd><code>app/mcp/mcp_endpoint.rb</code>, <code>app/mcp/doorkeeper_token_verifier.rb</code> and the SDK</dd>
+        <dt>Tool</dt><dd><code>app/mcp/application_tool.rb</code>, <code>app/mcp/posts/*_tool.rb</code></dd>
+        <dt>Interaction</dt><dd><code>app/interactions/posts/*.rb</code>, which the REST API uses too</dd>
+        <dt>Post</dt><dd><code>app/models/post.rb</code></dd>
+      </dl>
+    </section>
+
+    <section id="token">
+      <h2>How a client gets a token</h2>
+      <p>The first connection asks for the base scope only.</p>
+      <%= render "sequence", sequence: DocsHelper::FIRST_CONNECTION %>
+      <p>When a tool needs more than the token holds, the client asks the person again. This is called step-up, and it means a client only ever holds the access it has used.</p>
+      <%= render "sequence", sequence: DocsHelper::STEP_UP %>
+    </section>
+
+    <section id="tools">
+      <h2>Tools</h2>
+      <div class="table" tabindex="0" role="region" aria-label="All tools">
+        <table>
+          <thead><tr><th>Tool</th><th>Scope</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <% @reference.tools.each do |tool| %>
+              <tr>
+                <td><a href="#<%= tool.tool_name %>"><code><%= tool.tool_name %></code></a></td>
+                <td><span class="<%= scope_class(tool.required_scope) %>"><%= tool.required_scope %></span></td>
+                <td><%= @reference.behavior(tool) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Every tool returns its result twice, as <code>structuredContent</code> and as the same JSON in <code>content[0].text</code>, for clients that do not read structured content yet. The server also tells clients that post titles and bodies are data, never instructions to follow.</p>
+
+      <% @reference.tools.each do |tool| %>
+        <%= render "tool", tool:, reference: @reference %>
+      <% end %>
+    </section>
+
+    <section id="scopes">
+      <h2>Scopes</h2>
+      <div class="table" tabindex="0" role="region" aria-label="All scopes">
+        <table>
+          <thead><tr><th>Scope</th><th>The consent page says</th><th>Requested</th><th>Tools</th></tr></thead>
+          <tbody>
+            <% @reference.scopes.each do |scope| %>
+              <tr>
+                <td><code><%= scope %></code></td>
+                <td><%= @reference.scope_label(scope) %></td>
+                <td><%= @reference.base_scope?(scope) ? "On first connection" : "On first use, through step-up" %></td>
+                <td>
+                  <% @reference.tools_with_scope(scope).each do |tool| %>
+                    <a href="#<%= tool.tool_name %>"><code><%= tool.tool_name %></code></a>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="errors">
+      <h2>Errors</h2>
+      <p>Refusals are HTTP errors. A tool that ran but could not do its job answers <code>200</code> with <code>isError</code>, so that the model can read why and try again.</p>
+      <div class="table" tabindex="0" role="region" aria-label="All errors">
+        <table>
+          <thead><tr><th>Response</th><th>When</th><th>What the client does</th></tr></thead>
+          <tbody>
+            <tr><td><code>401</code></td><td class="wrap">The request has no token.</td><td class="wrap">Starts sign-in from the <code>resource_metadata</code> URL in <code>WWW-Authenticate</code>.</td></tr>
+            <tr><td><code>401</code> <code>invalid_token</code></td><td class="wrap">The token is unknown, expired, revoked or issued for another server. All four get the same answer.</td><td class="wrap">Refreshes it, or signs in again.</td></tr>
+            <tr><td><code>400</code> <code>invalid_request</code></td><td class="wrap">The <code>Authorization</code> header is not one Bearer token.</td><td class="wrap">Fixes the header.</td></tr>
+            <tr><td><code>403</code> <code>insufficient_scope</code></td><td class="wrap">The token lacks the scope of this tool. <code>WWW-Authenticate</code> names it.</td><td class="wrap">Asks the person again, for the scopes it has plus that one.</td></tr>
+            <tr><td><code>403</code> <code>-32600</code></td><td class="wrap">The Origin or Host is not allowed.</td><td class="wrap">A browser client needs its origin in <code>MCP_ALLOWED_ORIGINS</code>. Other clients send no Origin.</td></tr>
+            <tr><td><code>405</code></td><td class="wrap"><code>GET /mcp</code>: this server offers no event stream.</td><td class="wrap">Uses <code>POST</code>.</td></tr>
+            <tr><td><code>413</code></td><td class="wrap">The body is over <%= max_mib %> MiB.</td><td class="wrap">Sends less.</td></tr>
+            <tr><td><code>429</code></td><td class="wrap">Too many requests from this address or token.</td><td class="wrap">Waits for <code>Retry-After</code> seconds.</td></tr>
+            <tr><td><code>400</code> <code>-32700</code></td><td class="wrap">The body is not valid JSON.</td><td class="wrap">Fixes the request.</td></tr>
+            <tr><td><code>200</code> <code>-32602</code></td><td class="wrap">No tool has that name.</td><td class="wrap">Lists the tools again.</td></tr>
+            <tr><td><code>200</code> <code>-32603</code></td><td class="wrap">The server failed unexpectedly. The message holds no details, and the failure is reported on the server.</td><td class="wrap">Retries later.</td></tr>
+            <tr><td><code>200</code> <code>isError</code></td><td class="wrap">Arguments are missing or invalid, the post does not exist, or validation failed. The text says why.</td><td class="wrap">Reads the text and corrects the call.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="http">
+      <h2>Raw HTTP</h2>
+      <p>Clients handle all of this for you, but it helps to see one call. In development, get a one-hour token with all scopes:</p>
+      <pre tabindex="0"><code>TOKEN=$(docker compose exec -T web bin/rails mcp:dev_token)</code></pre>
+      <p>Then call a tool:</p>
+      <pre tabindex="0"><code>curl <%= endpoint %> \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-11-25" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_post","arguments":{"id":1}}}'</code></pre>
+      <p>The response:</p>
+      <pre tabindex="0"><code><%= JSON.pretty_generate(jsonrpc: "2.0", id: 1, result: { content: [ { type: "text", text: Posts::ToolPayload::EXAMPLE.to_json } ], isError: false, structuredContent: Posts::ToolPayload::EXAMPLE }) %></code></pre>
+      <details>
+        <summary>The same call on protocol 2026-07-28</summary>
+        <p>This version has no <code>initialize</code> handshake. Each request carries its own protocol version and client details, and repeats the method and tool name as headers.</p>
+        <pre tabindex="0"><code>curl <%= endpoint %> \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/call" \
+  -H "Mcp-Name: get_post" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_post","arguments":{"id":1},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"curl","version":"1.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}'</code></pre>
+      </details>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <div class="wide">This page is rendered from the tool classes in <code>app/mcp</code> on every request.</div>
+</footer>

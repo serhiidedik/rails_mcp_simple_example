@@ -4,7 +4,7 @@ module Posts
     title "List posts"
     description "Lists posts, newest first. Pass next_cursor back as cursor to get the following page."
     required_scope "posts:read"
-    annotations(read_only_hint: true, idempotent_hint: true, open_world_hint: false)
+    annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
     input_schema(
       properties: {
         cursor: { type: "string", description: "The next_cursor of the previous page. Omit it for the first page." },
@@ -20,6 +20,7 @@ module Posts
       required: %w[ posts next_cursor ],
       additionalProperties: false
     )
+    example arguments: { limit: 1 }, result: { posts: [ ToolPayload::EXAMPLE.merge(id: 2) ], next_cursor: "Mg" }
 
     def self.perform(**arguments)
       respond_with(List.run(arguments)) do |page|

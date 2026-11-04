@@ -1,0 +1,16 @@
+<figure class="sequence" style="--lanes: <%= sequence[:lanes].size %>" aria-label="<%= sequence[:caption] %>">
+  <div class="lanes" aria-hidden="true">
+    <% sequence[:lanes].each do |lane| %><span><%= lane %></span><% end %>
+  </div>
+  <ol>
+    <% sequence[:steps].each do |step| %>
+      <li class="<%= step_classes(step, sequence[:lanes].size) %>" style="<%= step_style(step, sequence[:lanes].size) %>">
+        <p>
+          <%= inline_code(step.text) %>
+          <% if step.outcome %><span class="refusal"><%= step.outcome %></span><% end %>
+        </p>
+        <i class="arrow" aria-hidden="true"></i>
+      </li>
+    <% end %>
+  </ol>
+</figure>

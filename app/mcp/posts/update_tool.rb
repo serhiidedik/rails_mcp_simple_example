@@ -17,6 +17,8 @@ module Posts
       additionalProperties: false
     )
     output_schema(ToolPayload::POST)
+    example arguments: { id: 1, published: true },
+            result: ToolPayload::EXAMPLE.merge(published: true, updated_at: "2026-11-04T10:05:00Z")
 
     def self.perform(**arguments)
       respond_with(Update.run(arguments)) { |post| ToolPayload.post(post) }

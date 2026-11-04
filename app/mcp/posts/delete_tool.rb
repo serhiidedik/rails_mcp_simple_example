@@ -15,6 +15,7 @@ module Posts
       required: %w[ id deleted ],
       additionalProperties: false
     )
+    example arguments: { id: 1 }, result: { id: 1, deleted: true }
 
     def self.perform(id:)
       respond_with(Destroy.run(id:)) { |post| { id: post.id, deleted: post.destroyed? } }
