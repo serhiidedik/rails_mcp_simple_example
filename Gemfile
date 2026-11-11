@@ -13,7 +13,7 @@ gem "puma", ">= 5.0"
 gem "bcrypt", "~> 3.1.7"
 
 # Official Model Context Protocol SDK: Streamable HTTP transport, tools, OAuth resource server.
-gem "mcp", "~> 1.8.2"
+gem "mcp", "~> 1.9.0"
 
 # OAuth 2.1 authorization server. The 6.0 line is the first with native RFC 8707 (resource),
 # RFC 8414 (metadata), RFC 9207 (iss) and exact redirect URI matching, all required by the
