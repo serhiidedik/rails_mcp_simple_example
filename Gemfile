@@ -18,7 +18,7 @@ gem "mcp", "~> 1.8.2"
 # OAuth 2.1 authorization server. The 6.0 line is the first with native RFC 8707 (resource),
 # RFC 8414 (metadata), RFC 9207 (iss) and exact redirect URI matching, all required by the
 # MCP authorization spec. Move to "~> 6.0" when 6.0.0 final ships.
-gem "doorkeeper", "~> 6.0.0.rc2"
+gem "doorkeeper", "~> 6.0.0.rc3"
 
 # Encapsulated business operations, shared by the REST controllers and the MCP tools.
 gem "active_interaction", "~> 5.5"
